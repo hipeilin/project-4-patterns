@@ -263,7 +263,7 @@ async function collectMatchedGroups(matchedValue) {
           return {
             ...row,
             id: `${fileName}_${windowIdx}_${row.id}_${rowIdx}`,
-            valid: 1
+            valid: Number(row.valid ?? 1)
           };
         });
         if (normalizedRows.length) {
@@ -622,14 +622,13 @@ function renderMatchedSubChart(container, rows) {
         .text(d.item.replace(/^slot_/, ""));
     });
 
-  const matchedColor = "#808080";
   svg.selectAll(".matched-path")
     .data(rows)
     .enter()
     .append("path")
     .attr("class", "matched-path")
     .attr("fill", "none")
-    .attr("stroke", matchedColor)
+    .attr("stroke", (d) => (d.valid === 1 ? "green" : "red"))
     .attr("stroke-opacity", 0.5)
     .attr("stroke-width", 1.8)
     .attr("stroke-linecap", "round")
@@ -649,7 +648,7 @@ function renderMatchedSubChart(container, rows) {
     .attr("r", 1)
     .attr("cx", (d) => xScale(d.startTime))
     .attr("cy", (d) => yScale(d.source) + yScale.bandwidth() / 2)
-    .attr("fill", matchedColor)
+    .attr("fill", (d) => (d.valid === 1 ? "green" : "red"))
     .attr("opacity", 0.7);
 
   svg.selectAll(".matched-end-point")
@@ -660,8 +659,8 @@ function renderMatchedSubChart(container, rows) {
     .attr("r", 2)
     .attr("cx", (d) => xScale(d.endTime))
     .attr("cy", (d) => yScale(d.target) + yScale.bandwidth() / 2)
-    .attr("fill", matchedColor)
-    .attr("stroke", "#666666")
+    .attr("fill", (d) => (d.valid === 1 ? "green" : "red"))
+    .attr("stroke", (d) => (d.valid === 1 ? "darkgreen" : "darkred"))
     .attr("stroke-width", 0.6);
 
   centerScrollToMiddle(chartWrap.node());
