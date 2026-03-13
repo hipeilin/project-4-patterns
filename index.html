@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Motif Window Viewer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <h1>Motif Windows</h1>
+      <p>Each column shows five metrics from <code>window_idx</code> to <code>window_idx + 30</code>.</p>
+      <div id="global-legend" class="legend header-legend"></div>
+    </header>
+
+    <main>
+      <section id="status" class="status">Loading data...</section>
+      <section class="viz-section viz-scroll">
+        <div class="viz-scroll-content">
+          <h2 class="section-title">Derived Timeseries</h2>
+          <section id="charts" class="charts-grid"></section>
+          <h2 class="section-title">Corresponding Sequences</h2>
+          <section id="student-charts" class="charts-grid"></section>
+          <h2 class="section-title">Matched Aggregated Sequences</h2>
+          <section id="matched-charts" class="charts-grid"></section>
+        </div>
+      </section>
+    </main>
+    <div id="tooltip" class="tooltip"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,169 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f5f7fb;
+  color: #1f2a37;
+}
+
+.page-header {
+  padding: 16px 20px 8px;
+}
+
+.page-header h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+}
+
+.page-header p {
+  margin: 0;
+  color: #52606d;
+}
+
+main {
+  padding: 12px 20px 24px;
+}
+
+.status {
+  margin-bottom: 12px;
+  color: #334e68;
+}
+
+.viz-section {
+  margin-bottom: 18px;
+}
+
+.viz-scroll {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.viz-scroll-content {
+  min-width: max-content;
+}
+
+.section-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #334e68;
+}
+
+.charts-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.chart-card {
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 320px;
+  max-width: 320px;
+}
+
+.chart-title {
+  margin: 0 0 2px;
+  font-size: 14px;
+}
+
+.chart-subtitle {
+  margin: 0 0 8px;
+  color: #627d98;
+  font-size: 12px;
+}
+
+.chart-svg {
+  width: 100%;
+  height: 100px;
+}
+
+.student-chart-wrap {
+  overflow-x: auto;
+}
+
+.student-svg {
+  display: block;
+}
+
+.matched-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.matched-item {
+  border-top: 1px solid #e4e7eb;
+  padding-top: 8px;
+}
+
+.matched-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.axis path,
+.axis line {
+  stroke: #bcccdc;
+}
+
+.axis text {
+  fill: #486581;
+  font-size: 10px;
+}
+
+.line {
+  fill: none;
+  stroke-width: 2px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 20px;
+  row-gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.header-legend {
+  margin-top: 10px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.error {
+  color: #9b1c1c;
+}
+
+.tooltip {
+  position: fixed;
+  opacity: 0;
+  pointer-events: none;
+  background: #102a43;
+  color: #f0f4f8;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(16, 42, 67, 0.3);
+}
