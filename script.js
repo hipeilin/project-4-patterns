@@ -70,12 +70,12 @@ function loadStudentCsv(fileName) {
 
 function coerceSeriesColumns(rows) {
   if (!rows.length) return [];
-  return Object.keys(rows[0]).slice(0, 5);
+  return Object.keys(rows[0]).slice(2, 8);
 }
 
 function buildWindowSlice(rows, startIndex) {
   const start = Math.max(0, startIndex);
-  const endExclusive = start + WINDOW_LENGTH -1;
+  const endExclusive = start + WINDOW_LENGTH - 1;
   const slice = rows.slice(start, endExclusive);
   return { start, slice };
 }
@@ -89,7 +89,7 @@ function ensureGlobalLegend(columns) {
   globalColorScale = d3
     .scaleOrdinal()
     .domain(globalSeriesColumns)
-    .range(["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]);
+    .range(["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]);
 
   const legendItems = globalLegendEl
     .selectAll(".legend-item")
@@ -110,12 +110,23 @@ function centerScrollToMiddle(scrollEl) {
 
 function renderTimeseriesCard(motifRow, index, rows, columns, startIndex) {
   const card = chartsContainer.append("article").attr("class", "chart-card");
+  const formatScore = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return "N/A";
+    return Number(numeric.toFixed(2)).toString();
+  };
+  const frequencyScore = formatScore(motifRow.frequency_score);
+  const sequenceScore = formatScore(motifRow.sequence_score);
+  const combinedScore = formatScore(motifRow.combined_score);
+
   card.append("h3")
     .attr("class", "chart-title")
     .text(`${index + 1}. ${motifRow.filename}`);
   card.append("p")
     .attr("class", "chart-subtitle")
-    .text(`window_idx=${startIndex}, points=${rows.length}`);
+    .text(
+      `window_idx=${startIndex}, points=${rows.length}, frequency_score=${frequencyScore}, sequence_score=${sequenceScore}, combined_score=${combinedScore}`
+    );
 
   if (!rows.length || !columns.length) {
     card.append("p").attr("class", "error").text("No data available for this window.");
@@ -174,7 +185,26 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex) {
     .append("path")
     .attr("class", "line")
     .attr("stroke", (d) => globalColorScale(d.name))
-    .attr("d", (d) => line(d.values));
+    .attr("d", (d) => line(d.values))
+    .style("cursor", "pointer")
+    .on("mouseover", function onOver(event, d) {
+      g.selectAll(".line").attr("stroke-opacity", 0.2);
+      d3.select(this).attr("stroke-opacity", 1).attr("stroke-width", 3);
+      tooltip
+        .style("opacity", 1)
+        .html(`<strong>Dimension:</strong> ${d.name}`)
+        .style("left", `${event.clientX + 10}px`)
+        .style("top", `${event.clientY - 28}px`);
+    })
+    .on("mousemove", function onMove(event) {
+      tooltip
+        .style("left", `${event.clientX + 10}px`)
+        .style("top", `${event.clientY - 28}px`);
+    })
+    .on("mouseout", function onOut() {
+      g.selectAll(".line").attr("stroke-opacity", 1).attr("stroke-width", 2);
+      tooltip.style("opacity", 0);
+    });
 }
 
 function normalizeStudentRow(row, index) {
@@ -198,7 +228,7 @@ function extractStudentRowsForWindow(rows, windowIdx) {
     .map((row, index) => normalizeStudentRow(row, index))
     .filter((row) => Number.isFinite(row.startTime) && Number.isFinite(row.endTime) && row.source && row.target);
 
-  const upperStartBound = windowIdx + WINDOW_LENGTH*2;
+  const upperStartBound = windowIdx + WINDOW_LENGTH * 2;
   const extracted = [];
 
   let started = false;
@@ -245,16 +275,22 @@ async function collectMatchedGroups(matchedValue) {
   const entries = Object.entries(matchedMap);
 
   for (let fileIdx = 0; fileIdx < entries.length; fileIdx += 1) {
-    const [baseName, indices] = entries[fileIdx];
+    const [baseName, matches] = entries[fileIdx];
     const fileName = sanitizeFileName(String(baseName || "").trim());
-    if (!fileName || !Array.isArray(indices)) {
+    if (!fileName || !Array.isArray(matches)) {
       continue;
     }
 
     try {
       const studentRows = await loadStudentCsv(fileName);
-      for (let idxPos = 0; idxPos < indices.length; idxPos += 1) {
-        const windowIdx = Number(indices[idxPos]);
+      for (let idxPos = 0; idxPos < matches.length; idxPos += 1) {
+        const matchItem = matches[idxPos];
+        const windowIdx = Number(
+          typeof matchItem === "object" && matchItem !== null ? matchItem.window_start : matchItem
+        );
+        const distance =
+          typeof matchItem === "object" && matchItem !== null ? Number(matchItem.distance) : null;
+
         if (!Number.isFinite(windowIdx)) {
           continue;
         }
@@ -270,6 +306,7 @@ async function collectMatchedGroups(matchedValue) {
           groups.push({
             fileName,
             windowIdx,
+            distance: Number.isFinite(distance) ? distance : null,
             rows: normalizedRows
           });
         }
@@ -284,9 +321,6 @@ async function collectMatchedGroups(matchedValue) {
 
 function renderStudentCard(motifRow, index, rows, windowIdx) {
   const card = studentChartsContainer.append("article").attr("class", "chart-card");
-  card.append("h3")
-    .attr("class", "chart-title")
-    .text(`${index + 1}. ${motifRow.filename}`);
   card.append("p")
     .attr("class", "chart-subtitle")
     .text(`window_idx=${windowIdx}, events=${rows.length}`);
@@ -297,10 +331,9 @@ function renderStudentCard(motifRow, index, rows, windowIdx) {
   }
 
   const margin = { top: 10, right: 16, bottom: 34, left: 120 };
-  const minStart = d3.min(rows, (d) => d.startTime);
-  const maxEnd = d3.max(rows, (d) => d.endTime);
-  const xDomainRange = Math.max(60, maxEnd - minStart);
-  const xDomainEnd = minStart + xDomainRange;
+  const xDomainStart = windowIdx;
+  const xDomainEnd = windowIdx + WINDOW_LENGTH * 2;
+  const xDomainRange = xDomainEnd - xDomainStart;
   const chartInnerWidth = Math.max(220, xDomainRange * 5);
 
   const dynamicItems = Array.from(new Set(rows.flatMap((d) => [d.source, d.target]).filter(Boolean)));
@@ -347,10 +380,10 @@ function renderStudentCard(motifRow, index, rows, windowIdx) {
     .append("g")
     .attr("transform", `translate(${margin.left},${margin.top})`);
 
-  const xScale = d3.scaleLinear().domain([minStart, xDomainEnd]).range([0, chartInnerWidth]);
-  const tickStart = Math.ceil(minStart / 5) * 5;
+  const xScale = d3.scaleLinear().domain([xDomainStart, xDomainEnd]).range([0, chartInnerWidth]);
+  const tickStart = Math.ceil(xDomainStart / 5) * 5;
   const tickEnd = Math.floor(xDomainEnd / 5) * 5;
-  const xTickValues = tickStart <= tickEnd ? d3.range(tickStart, tickEnd + 1, 5) : [Math.round(minStart), Math.round(maxEnd)];
+  const xTickValues = tickStart <= tickEnd ? d3.range(tickStart, tickEnd + 1, 5) : [Math.round(xDomainStart), Math.round(xDomainEnd)];
   const yScale = (item) => {
     const pos = itemPositions.get(item);
     return pos ? pos.y : 0;
@@ -668,9 +701,6 @@ function renderMatchedSubChart(container, rows) {
 
 function renderMatchedCard(motifRow, index, groups, windowIdx) {
   const card = matchedChartsContainer.append("article").attr("class", "chart-card");
-  card.append("h3")
-    .attr("class", "chart-title")
-    .text(`${index + 1}. ${motifRow.filename}`);
   card.append("p")
     .attr("class", "chart-subtitle")
     .text(`window_idx=${windowIdx}, matched charts=${groups.length}`);
@@ -683,9 +713,12 @@ function renderMatchedCard(motifRow, index, groups, windowIdx) {
   const stack = card.append("div").attr("class", "matched-stack");
   groups.forEach((group) => {
     const rowBlock = stack.append("div").attr("class", "matched-item");
+    const distanceLabel = group.distance !== null ? `, distance=${group.distance.toFixed(3)}` : "";
     rowBlock.append("p")
       .attr("class", "chart-subtitle")
-      .text(`${group.fileName.replace(".csv", "")} @ ${group.windowIdx} (${group.rows.length} events)`);
+      .html(
+        `<strong><u>${group.fileName.replace(".csv", "")}</u></strong> @ ${group.windowIdx} (${group.rows.length} events${distanceLabel})`
+      );
     renderMatchedSubChart(rowBlock, group.rows);
   });
 }
@@ -710,7 +743,7 @@ async function run() {
     for (let i = 0; i < motifRows.length; i += 1) {
       const motifRow = motifRows[i];
       const fileName = sanitizeFileName(String(motifRow.filename || "").trim());
-      const windowIdx = Number(motifRow.window_idx);
+      const windowIdx = Number(motifRow.window_start);
 
       if (!fileName || !Number.isInteger(windowIdx)) {
         const card = chartsContainer.append("article").attr("class", "chart-card");
