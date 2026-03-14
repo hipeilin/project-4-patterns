@@ -125,7 +125,7 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex) {
   card.append("p")
     .attr("class", "chart-subtitle")
     .text(
-      `window_idx=${startIndex}, points=${rows.length}, frequency_score=${frequencyScore}, sequence_score=${sequenceScore}, combined_score=${combinedScore}`
+      `window_idx=${startIndex}, frequency_score=${frequencyScore}, sequence_score=${sequenceScore}, combined_score=${combinedScore}`
     );
 
   if (!rows.length || !columns.length) {
