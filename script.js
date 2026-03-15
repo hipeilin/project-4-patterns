@@ -734,10 +734,7 @@ function renderMatchedSubChart(container, rows) {
 
 function renderMatchedCard(motifRow, index, groups, windowIdx) {
   const card = matchedChartsContainer.append("article").attr("class", "chart-card");
-  card.append("p")
-    .attr("class", "chart-subtitle")
-    .text(`window_idx=${windowIdx}, matched charts=${groups.length}`);
-
+ 
   if (!groups.length) {
     card.append("p").attr("class", "error").text("No matching rows resolved from `matched` map.");
     return;
