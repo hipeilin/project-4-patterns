@@ -130,7 +130,7 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex) {
     //   `window_idx=${startIndex}, frequency_score=${frequencyScore}, sequence_score=${sequenceScore}, combined_score=${combinedScore}`
     // );
     .html(
-      `window_idx=${startIndex} <br> appeared ${frequency} times in total, in ${sequence_count} unique sequences`
+      `window_idx=${startIndex} <br> appeared ${frequency} times in total, in ${sequence_count} unique student(s)`
     );
   if (!rows.length || !columns.length) {
     card.append("p").attr("class", "error").text("No data available for this window.");
