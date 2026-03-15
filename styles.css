@@ -78,6 +78,32 @@ main {
   font-size: 12px;
 }
 
+.metrics-table {
+  width: auto;
+  border-collapse: collapse;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #627d98;
+}
+
+.metrics-table td {
+  padding: 1px 0;
+  vertical-align: top;
+}
+
+.metrics-label {
+  text-align: left;
+  padding-left: 0;
+  padding-right: 4px;
+  white-space: nowrap;
+}
+
+.metrics-value {
+  text-align: left;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .chart-svg {
   width: 100%;
   height: 100px;

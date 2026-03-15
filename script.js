@@ -325,9 +325,38 @@ async function collectMatchedGroups(matchedValue) {
 
 function renderStudentCard(motifRow, index, rows, windowIdx) {
   const card = studentChartsContainer.append("article").attr("class", "chart-card");
+  const formatMetric = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return "N/A";
+    return `${Number((numeric * 100).toFixed(2)).toString()}%`;
+  };
+
   card.append("p")
     .attr("class", "chart-subtitle")
-    .text(`window_idx=${windowIdx}, events=${rows.length}`);
+    .text(`window_idx=${windowIdx}, # of events=${rows.length}`);
+
+  const metrics = [
+    ["mean_max_consecutive_same_source", motifRow.mean_max_consecutive_same_source],
+    ["mean_max_consecutive_same_target", motifRow.mean_max_consecutive_same_target],
+    ["mean_tracing_count", motifRow.mean_tracing_count],
+    ["mean_cycle_count", motifRow.mean_cycle_count],
+    ["mean_max_consecutive_same_category", motifRow.mean_max_consecutive_same_category],
+    ["mean_sparsity", motifRow.mean_sparsity]
+  ];
+
+  const metricsTable = card.append("table").attr("class", "metrics-table");
+  const tbody = metricsTable.append("tbody");
+  const rowsSelection = tbody.selectAll("tr").data(metrics).enter().append("tr");
+
+  rowsSelection
+    .append("td")
+    .attr("class", "metrics-label")
+    .text(([label]) => label);
+
+  rowsSelection
+    .append("td")
+    .attr("class", "metrics-value")
+    .text(([_label, value]) => formatMetric(value));
 
   if (!rows.length) {
     card.append("p").attr("class", "error").text("No matching student rows found for this window.");
