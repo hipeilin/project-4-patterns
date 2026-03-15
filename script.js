@@ -115,19 +115,23 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex) {
     if (!Number.isFinite(numeric)) return "N/A";
     return Number(numeric.toFixed(2)).toString();
   };
-  const frequencyScore = formatScore(motifRow.frequency_score);
-  const sequenceScore = formatScore(motifRow.sequence_score);
-  const combinedScore = formatScore(motifRow.combined_score);
+  // const frequencyScore = formatScore(motifRow.frequency_score);
+  // const sequenceScore = formatScore(motifRow.sequence_score);
+  // const combinedScore = formatScore(motifRow.combined_score);
 
+  const frequency = motifRow.frequency;
+  const sequence_count = motifRow.sequence_count;
   card.append("h3")
     .attr("class", "chart-title")
     .text(`${index + 1}. ${motifRow.filename}`);
   card.append("p")
     .attr("class", "chart-subtitle")
-    .text(
-      `window_idx=${startIndex}, frequency_score=${frequencyScore}, sequence_score=${sequenceScore}, combined_score=${combinedScore}`
+    // .text(
+    //   `window_idx=${startIndex}, frequency_score=${frequencyScore}, sequence_score=${sequenceScore}, combined_score=${combinedScore}`
+    // );
+    .html(
+      `window_idx=${startIndex} <br> appeared ${frequency} times in total, in ${sequence_count} unique sequences`
     );
-
   if (!rows.length || !columns.length) {
     card.append("p").attr("class", "error").text("No data available for this window.");
     return;
