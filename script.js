@@ -10,17 +10,22 @@ const statusEl = d3.select("#status");
 const globalLegendEl = d3.select("#global-legend");
 const tooltip = d3.select("#tooltip");
 const motifSelectEl = d3.select("#motif-select");
+const matchedDistanceSliderEl = d3.select("#matched-distance-slider");
+const matchedDistanceValueEl = d3.select("#matched-distance-value");
+const topKMotifSliderEl = d3.select("#topk-motif-slider");
+const topKMotifValueEl = d3.select("#topk-motif-value");
 
 const multiTsCache = new Map();
 const studentCache = new Map();
 let globalSeriesColumns = null;
 let globalColorScale = null;
 let currentRunId = 0;
+let matchedDistanceThreshold = Number(matchedDistanceSliderEl.property("value")) || 2;
+let topKMotifs = Number(topKMotifSliderEl.property("value")) || 32;
 
 const motifCsvOptions = [
   { label: "motif_sparsity_only_freq.csv", path: "motifs/motif_sparsity_only_freq.csv" },
   { label: "motif_sparsity_freq+idle.csv", path: "motifs/motif_sparsity_freq+idle.csv" },
-  { label: "motif_separated_sparsity.csv", path: "motifs/motif_separated_sparsity.csv" }
 ];
 
 const categoryConfig = [
@@ -162,12 +167,6 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex) {
     }))
   }));
 
-  const yValues = series.flatMap((s) => s.values.map((d) => d.y)).filter((v) => Number.isFinite(v));
-  const yExtent = d3.extent(yValues);
-  const yMin = yExtent[0] ?? 0;
-  const yMax = yExtent[1] ?? 1;
-  const yPad = yMin === yMax ? 1 : (yMax - yMin) * 0.1;
-
   const x = d3
     .scaleLinear()
     .domain(d3.extent(rows, (_, i) => startIndex + i))
@@ -175,7 +174,7 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex) {
 
   const y = d3
     .scaleLinear()
-    .domain([yMin - yPad, yMax + yPad])
+    .domain([0, 1])
     .range([plotHeight, 0]);
 
   g.append("g")
@@ -240,29 +239,8 @@ function extractStudentRowsForWindow(rows, windowIdx) {
     .map((row, index) => normalizeStudentRow(row, index))
     .filter((row) => Number.isFinite(row.startTime) && Number.isFinite(row.endTime) && row.source && row.target);
 
-  const upperStartBound = windowIdx + WINDOW_LENGTH * 2;
-  const extracted = [];
-
-  let started = false;
-  for (let i = 0; i < normalizedRows.length; i += 1) {
-    const row = normalizedRows[i];
-
-    if (!started) {
-      if (row.startTime > windowIdx) {
-        started = true;
-      } else {
-        continue;
-      }
-    }
-
-    if (row.startTime > upperStartBound) {
-      break;
-    }
-
-    extracted.push(row);
-  }
-
-  return extracted;
+  const upperStartBound = windowIdx + 60;
+  return normalizedRows.filter((row) => row.startTime >= windowIdx && row.startTime < upperStartBound);
 }
 
 function parseMatchedMap(matchedValue) {
@@ -281,47 +259,89 @@ function parseMatchedMap(matchedValue) {
   }
 }
 
-async function collectMatchedGroups(matchedValue) {
-  const matchedMap = parseMatchedMap(matchedValue);
-  const groups = [];
-  const entries = Object.entries(matchedMap);
+function normalizeMatchedEntries(matchedMap) {
+  const normalized = [];
+  const entries = Object.entries(matchedMap || {});
 
-  for (let fileIdx = 0; fileIdx < entries.length; fileIdx += 1) {
-    const [baseName, matches] = entries[fileIdx];
-    const fileName = sanitizeFileName(String(baseName || "").trim());
-    if (!fileName || !Array.isArray(matches)) {
+  for (let i = 0; i < entries.length; i += 1) {
+    const [key, value] = entries[i];
+
+    // New format: { "match_0001": { file_id, window_start, distance, ... } }
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      const fileName = sanitizeFileName(String(value.file_id ?? value.filename ?? key ?? "").trim());
+      const windowIdx = Number(value.window_start);
+      const distance = Number(value.distance);
+      if (fileName && Number.isFinite(windowIdx)) {
+        normalized.push({
+          fileName,
+          windowIdx,
+          distance: Number.isFinite(distance) ? distance : null
+        });
+      }
       continue;
     }
 
-    try {
-      const studentRows = await loadStudentCsv(fileName);
-      for (let idxPos = 0; idxPos < matches.length; idxPos += 1) {
-        const matchItem = matches[idxPos];
+    // Previous format: { "D2RK": [{ window_start, distance }, ...] } or numeric array
+    if (Array.isArray(value)) {
+      const fileName = sanitizeFileName(String(key || "").trim());
+      if (!fileName) continue;
+
+      value.forEach((item) => {
         const windowIdx = Number(
-          typeof matchItem === "object" && matchItem !== null ? matchItem.window_start : matchItem
+          typeof item === "object" && item !== null ? item.window_start : item
         );
         const distance =
-          typeof matchItem === "object" && matchItem !== null ? Number(matchItem.distance) : null;
-
-        if (!Number.isFinite(windowIdx)) {
-          continue;
-        }
-        const extracted = extractStudentRowsForWindow(studentRows, windowIdx);
-        const normalizedRows = extracted.map((row, rowIdx) => {
-          return {
-            ...row,
-            id: `${fileName}_${windowIdx}_${row.id}_${rowIdx}`,
-            valid: Number(row.valid ?? 1)
-          };
-        });
-        if (normalizedRows.length) {
-          groups.push({
+          typeof item === "object" && item !== null ? Number(item.distance) : null;
+        if (Number.isFinite(windowIdx)) {
+          normalized.push({
             fileName,
             windowIdx,
-            distance: Number.isFinite(distance) ? distance : null,
-            rows: normalizedRows
+            distance: Number.isFinite(distance) ? distance : null
           });
         }
+      });
+    }
+  }
+
+  return normalized;
+}
+
+async function collectMatchedGroups(matchedValue) {
+  const matchedMap = parseMatchedMap(matchedValue);
+  const groups = [];
+  const normalizedEntries = normalizeMatchedEntries(matchedMap);
+  for (let i = 0; i < normalizedEntries.length; i += 1) {
+    const matchItem = normalizedEntries[i];
+    const fileName = matchItem.fileName;
+    const windowIdx = Number(matchItem.windowIdx);
+    const distance = Number(matchItem.distance);
+    if (!fileName || !Number.isFinite(windowIdx)) continue;
+
+    try {
+      const studentRows = await loadStudentCsv(fileName);
+      const sourceRows = await loadTimeseriesCsv(fileName);
+      const seriesColumns = coerceSeriesColumns(sourceRows);
+      if (Number.isFinite(distance) && distance > matchedDistanceThreshold) {
+        continue;
+      }
+      const extracted = extractStudentRowsForWindow(studentRows, windowIdx);
+      const { slice: seriesRows } = buildWindowSlice(sourceRows, windowIdx);
+      const normalizedRows = extracted.map((row, rowIdx) => {
+        return {
+          ...row,
+          id: `${fileName}_${windowIdx}_${row.id}_${rowIdx}`,
+          valid: Number(row.valid ?? 1)
+        };
+      });
+      if (normalizedRows.length) {
+        groups.push({
+          fileName,
+          windowIdx,
+          distance: Number.isFinite(distance) ? distance : null,
+          rows: normalizedRows,
+          seriesRows,
+          seriesColumns
+        });
       }
     } catch (_err) {
       // Ignore missing student files in matched map and continue.
@@ -329,6 +349,112 @@ async function collectMatchedGroups(matchedValue) {
   }
 
   return groups;
+}
+
+function renderMatchedTimeseries(container, fileName, windowIdx, rows, columns) {
+  if (!rows?.length || !columns?.length) {
+    container.append("p").attr("class", "error").text("No matched timeseries data.");
+    return;
+  }
+
+  const svg = container
+    .append("svg")
+    .attr("class", "chart-svg")
+    .attr("viewBox", `0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`);
+
+  const plotWidth = CHART_WIDTH - MARGIN.left - MARGIN.right;
+  const plotHeight = CHART_HEIGHT - MARGIN.top - MARGIN.bottom;
+  const g = svg.append("g").attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
+
+  const series = columns.map((name) => ({
+    name,
+    values: rows.map((row, i) => ({
+      x: windowIdx + i,
+      y: Number(row[name])
+    }))
+  }));
+
+  const yValues = series.flatMap((s) => s.values.map((d) => d.y)).filter((v) => Number.isFinite(v));
+  const yExtent = d3.extent(yValues);
+  const yMin = yExtent[0] ?? 0;
+  const yMax = yExtent[1] ?? 1;
+  const yPad = yMin === yMax ? 1 : (yMax - yMin) * 0.1;
+
+  const x = d3
+    .scaleLinear()
+    .domain(d3.extent(rows, (_, i) => windowIdx + i))
+    .range([0, plotWidth]);
+
+  const y = d3
+    .scaleLinear()
+    .domain([yMin - yPad, yMax + yPad])
+    .range([plotHeight, 0]);
+
+  g.append("g")
+    .attr("class", "axis")
+    .attr("transform", `translate(0,${plotHeight})`)
+    .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format("d")));
+
+  g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4));
+
+  const line = d3
+    .line()
+    .defined((d) => Number.isFinite(d.y))
+    .x((d) => x(d.x))
+    .y((d) => y(d.y));
+
+  const colorScale =
+    globalColorScale && columns.every((col) => globalColorScale.domain().includes(col))
+      ? globalColorScale
+      : d3
+          .scaleOrdinal()
+          .domain(columns)
+          .range(["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]);
+
+  g.selectAll(".line")
+    .data(series)
+    .enter()
+    .append("path")
+    .attr("class", "line")
+    .attr("stroke", (d) => colorScale(d.name))
+    .attr("stroke-width", 1.8)
+    .attr("d", (d) => line(d.values));
+
+  container
+    .append("p")
+    .attr("class", "chart-subtitle")
+    .text(`${fileName.replace(".csv", "")} time series @ ${windowIdx}`);
+}
+
+function formatDistanceValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "N/A";
+  return Number(numeric.toFixed(2)).toString();
+}
+
+function updateMatchedDistanceLabel() {
+  const maxValue = formatDistanceValue(matchedDistanceSliderEl.attr("max"));
+  matchedDistanceValueEl.text(`${formatDistanceValue(matchedDistanceThreshold)} / ${maxValue}`);
+}
+
+function updateTopKLabel() {
+  const maxValue = Number(topKMotifSliderEl.attr("max")) || topKMotifs;
+  topKMotifValueEl.text(`${topKMotifs} / ${maxValue}`);
+}
+
+function computeMaxMatchedDistance(motifRows) {
+  let maxDistance = 0;
+  motifRows.forEach((row) => {
+    const matchedMap = parseMatchedMap(row.matched);
+    const normalizedEntries = normalizeMatchedEntries(matchedMap);
+    normalizedEntries.forEach((entry) => {
+      const distance = Number(entry.distance);
+      if (Number.isFinite(distance) && distance > maxDistance) {
+        maxDistance = distance;
+      }
+    });
+  });
+  return maxDistance;
 }
 
 function renderStudentCard(motifRow, index, rows, windowIdx) {
@@ -373,7 +499,7 @@ function renderStudentCard(motifRow, index, rows, windowIdx) {
 
   const margin = { top: 10, right: 16, bottom: 34, left: 120 };
   const xDomainStart = windowIdx;
-  const xDomainEnd = windowIdx + WINDOW_LENGTH * 2;
+  const xDomainEnd = windowIdx + 60;
   const xDomainRange = xDomainEnd - xDomainStart;
   const chartInnerWidth = Math.max(220, xDomainRange * 5);
 
@@ -578,12 +704,11 @@ function renderStudentCard(motifRow, index, rows, windowIdx) {
   centerScrollToMiddle(chartWrap.node());
 }
 
-function renderMatchedSubChart(container, rows) {
+function renderMatchedSubChart(container, rows, windowIdx) {
   const margin = { top: 10, right: 16, bottom: 34, left: 120 };
-  const minStart = d3.min(rows, (d) => d.startTime);
-  const maxEnd = d3.max(rows, (d) => d.endTime);
-  const xDomainRange = Math.max(60, maxEnd - minStart);
-  const xDomainEnd = minStart + xDomainRange;
+  const minStart = windowIdx;
+  const xDomainEnd = windowIdx + 60;
+  const xDomainRange = xDomainEnd - minStart;
   const chartInnerWidth = Math.max(220, xDomainRange * 5);
 
   const dynamicItems = Array.from(new Set(rows.flatMap((d) => [d.source, d.target]).filter(Boolean)));
@@ -633,7 +758,7 @@ function renderMatchedSubChart(container, rows) {
   const xScale = d3.scaleLinear().domain([minStart, xDomainEnd]).range([0, chartInnerWidth]);
   const tickStart = Math.ceil(minStart / 5) * 5;
   const tickEnd = Math.floor(xDomainEnd / 5) * 5;
-  const xTickValues = tickStart <= tickEnd ? d3.range(tickStart, tickEnd + 1, 5) : [Math.round(minStart), Math.round(maxEnd)];
+  const xTickValues = tickStart <= tickEnd ? d3.range(tickStart, tickEnd + 1, 5) : [Math.round(minStart), Math.round(xDomainEnd)];
   const yScale = (item) => {
     const pos = itemPositions.get(item);
     return pos ? pos.y : 0;
@@ -757,7 +882,8 @@ function renderMatchedCard(motifRow, index, groups, windowIdx) {
       .html(
         `<strong><u>${group.fileName.replace(".csv", "")}</u></strong> @ ${group.windowIdx} (${group.rows.length} events${distanceLabel})`
       );
-    renderMatchedSubChart(rowBlock, group.rows);
+    renderMatchedTimeseries(rowBlock, group.fileName, group.windowIdx, group.seriesRows, group.seriesColumns);
+    renderMatchedSubChart(rowBlock, group.rows, group.windowIdx);
   });
 }
 
@@ -787,11 +913,34 @@ async function run() {
   try {
     const motifRows = await d3.csv(selectedMotifPath, d3.autoType);
     if (runId !== currentRunId) return;
-    statusEl.text(`Loaded ${selectedMotifPath} (${motifRows.length} rows). Rendering chart rows...`);
 
-    for (let i = 0; i < motifRows.length; i += 1) {
+    const motifCount = motifRows.length;
+    topKMotifSliderEl.attr("max", Math.max(1, motifCount));
+    if (topKMotifs > motifCount) {
+      topKMotifs = motifCount;
+      topKMotifSliderEl.property("value", topKMotifs);
+    }
+    if (topKMotifs < 1) {
+      topKMotifs = 1;
+      topKMotifSliderEl.property("value", topKMotifs);
+    }
+    updateTopKLabel();
+
+    const maxDistance = computeMaxMatchedDistance(motifRows);
+    const sliderMax = maxDistance > 0 ? Number(maxDistance.toFixed(2)) : 10;
+    matchedDistanceSliderEl.attr("max", sliderMax);
+    if (matchedDistanceThreshold > sliderMax) {
+      matchedDistanceThreshold = sliderMax;
+      matchedDistanceSliderEl.property("value", sliderMax);
+    }
+    updateMatchedDistanceLabel();
+
+    const motifRowsToRender = motifRows.slice(0, topKMotifs);
+    statusEl.text(`Loaded ${selectedMotifPath} (${motifRowsToRender.length}/${motifRows.length} rows). Rendering chart rows...`);
+
+    for (let i = 0; i < motifRowsToRender.length; i += 1) {
       if (runId !== currentRunId) return;
-      const motifRow = motifRows[i];
+      const motifRow = motifRowsToRender[i];
       const fileName = sanitizeFileName(String(motifRow.filename || "").trim());
       const windowIdx = Number(motifRow.window_start);
 
@@ -858,5 +1007,35 @@ function initMotifSelector() {
   });
 }
 
+function initMatchedDistanceSlider() {
+  updateMatchedDistanceLabel();
+  matchedDistanceSliderEl.on("input", () => {
+    matchedDistanceThreshold = Number(matchedDistanceSliderEl.property("value"));
+    updateMatchedDistanceLabel();
+  });
+  matchedDistanceSliderEl.on("change", () => {
+    matchedDistanceThreshold = Number(matchedDistanceSliderEl.property("value"));
+    updateMatchedDistanceLabel();
+    statusEl.attr("class", "status").text("Applying matched distance filter...");
+    run();
+  });
+}
+
+function initTopKMotifSlider() {
+  updateTopKLabel();
+  topKMotifSliderEl.on("input", () => {
+    topKMotifs = Number(topKMotifSliderEl.property("value"));
+    updateTopKLabel();
+  });
+  topKMotifSliderEl.on("change", () => {
+    topKMotifs = Number(topKMotifSliderEl.property("value"));
+    updateTopKLabel();
+    statusEl.attr("class", "status").text("Applying top-k motif filter...");
+    run();
+  });
+}
+
 initMotifSelector();
+initMatchedDistanceSlider();
+initTopKMotifSlider();
 run();
