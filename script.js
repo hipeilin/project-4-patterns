@@ -9,11 +9,19 @@ const matchedChartsContainer = d3.select("#matched-charts");
 const statusEl = d3.select("#status");
 const globalLegendEl = d3.select("#global-legend");
 const tooltip = d3.select("#tooltip");
+const motifSelectEl = d3.select("#motif-select");
 
 const multiTsCache = new Map();
 const studentCache = new Map();
 let globalSeriesColumns = null;
 let globalColorScale = null;
+let currentRunId = 0;
+
+const motifCsvOptions = [
+  { label: "motif_sparsity_only_freq.csv", path: "motifs/motif_sparsity_only_freq.csv" },
+  { label: "motif_sparsity_freq+idle.csv", path: "motifs/motif_sparsity_freq+idle.csv" },
+  { label: "motif_separated_sparsity.csv", path: "motifs/motif_separated_sparsity.csv" }
+];
 
 const categoryConfig = [
   { name: "atmosphere", items: ["slot_atmosphere"], color: "#87BFFF" },
@@ -766,11 +774,23 @@ function renderMatchedErrorCard(index, fileName, message) {
 }
 
 async function run() {
+  const runId = ++currentRunId;
+  const selectedMotifPath = motifSelectEl.node()?.value || motifCsvOptions[0].path;
+
+  chartsContainer.selectAll("*").remove();
+  studentChartsContainer.selectAll("*").remove();
+  matchedChartsContainer.selectAll("*").remove();
+  globalLegendEl.selectAll(".legend-item").remove();
+  globalSeriesColumns = null;
+  globalColorScale = null;
+
   try {
-    const motifRows = await d3.csv("motif.csv", d3.autoType);
-    statusEl.text(`Loaded motif.csv (${motifRows.length} rows). Rendering chart rows...`);
+    const motifRows = await d3.csv(selectedMotifPath, d3.autoType);
+    if (runId !== currentRunId) return;
+    statusEl.text(`Loaded ${selectedMotifPath} (${motifRows.length} rows). Rendering chart rows...`);
 
     for (let i = 0; i < motifRows.length; i += 1) {
+      if (runId !== currentRunId) return;
       const motifRow = motifRows[i];
       const fileName = sanitizeFileName(String(motifRow.filename || "").trim());
       const windowIdx = Number(motifRow.window_start);
@@ -815,11 +835,28 @@ async function run() {
       }
     }
 
-    statusEl.text("Render complete.");
+    statusEl.text(`Render complete: ${selectedMotifPath}`);
   } catch (err) {
-    statusEl.attr("class", "status error").text("Failed to load motif.csv");
+    statusEl.attr("class", "status error").text(`Failed to load ${selectedMotifPath}`);
     console.error(err);
   }
 }
 
+function initMotifSelector() {
+  motifSelectEl
+    .selectAll("option")
+    .data(motifCsvOptions)
+    .enter()
+    .append("option")
+    .attr("value", (d) => d.path)
+    .text((d) => d.label);
+
+  motifSelectEl.property("value", motifCsvOptions[0].path);
+  motifSelectEl.on("change", () => {
+    statusEl.attr("class", "status").text("Loading selected motif file...");
+    run();
+  });
+}
+
+initMotifSelector();
 run();
