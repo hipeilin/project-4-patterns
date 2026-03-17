@@ -36,7 +36,7 @@ let topKMotifs =
   Number(topKMotifSliderEl.property("value")) ||
   Number(topKMotifSliderEl.attr("max")) ||
   32;
-const MOTIF_CSV_OPTIONS = ["motifs/motif_ed.csv", "motifs/motif_cos.csv"];
+const MOTIF_CSV_OPTIONS = ["motifs/motif_ed.csv", "motifs/motif_cos.csv", "motifs/motif_merged.csv"];
 
 const categoryConfig = [
   { name: "atmosphere", items: ["slot_atmosphere"], color: "#87BFFF" },
