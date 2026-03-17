@@ -13,6 +13,9 @@ const DERIVED_METRIC_COLUMNS = [
 
 const chartsContainer = d3.select("#charts");
 const studentChartsContainer = d3.select("#student-charts");
+const vizScrollEl = d3.select(".viz-scroll");
+const stickyXScrollEl = d3.select("#sticky-x-scroll");
+const stickyXScrollInnerEl = d3.select("#sticky-x-scroll-inner");
 const statusEl = d3.select("#status");
 const globalLegendEl = d3.select("#global-legend");
 const tooltip = d3.select("#tooltip");
@@ -28,6 +31,7 @@ let globalSeriesColumns = null;
 let globalColorScale = null;
 let currentRunId = 0;
 let resetSlidersToMaxOnNextRun = false;
+let isSyncingHorizontalScroll = false;
 let matchedDistanceThreshold =
   Number(matchedDistanceSliderEl.property("value")) ||
   Number(matchedDistanceSliderEl.attr("max")) ||
@@ -135,6 +139,39 @@ function centerScrollToMiddle(scrollEl) {
   if (!scrollEl) return;
   const maxScrollLeft = scrollEl.scrollWidth - scrollEl.clientWidth;
   scrollEl.scrollLeft = maxScrollLeft > 0 ? maxScrollLeft * 0.85 : 0;
+}
+
+function updateStickyHorizontalScrollbar() {
+  const mainScroll = vizScrollEl.node();
+  const stickyScroll = stickyXScrollEl.node();
+  if (!mainScroll || !stickyScroll) return;
+
+  const contentWidth = Math.max(mainScroll.scrollWidth, mainScroll.clientWidth);
+  stickyXScrollInnerEl.style("width", `${contentWidth}px`);
+  stickyScroll.scrollLeft = mainScroll.scrollLeft;
+}
+
+function initStickyHorizontalScrollbar() {
+  const mainScroll = vizScrollEl.node();
+  const stickyScroll = stickyXScrollEl.node();
+  if (!mainScroll || !stickyScroll) return;
+
+  mainScroll.addEventListener("scroll", () => {
+    if (isSyncingHorizontalScroll) return;
+    isSyncingHorizontalScroll = true;
+    stickyScroll.scrollLeft = mainScroll.scrollLeft;
+    isSyncingHorizontalScroll = false;
+  });
+
+  stickyScroll.addEventListener("scroll", () => {
+    if (isSyncingHorizontalScroll) return;
+    isSyncingHorizontalScroll = true;
+    mainScroll.scrollLeft = stickyScroll.scrollLeft;
+    isSyncingHorizontalScroll = false;
+  });
+
+  window.addEventListener("resize", updateStickyHorizontalScrollbar);
+  updateStickyHorizontalScrollbar();
 }
 
 function renderTimeseriesCard(motifRow, index, rows, columns, startIndex, endIndex) {
@@ -941,8 +978,10 @@ async function run() {
     }
 
     statusEl.text(`Render complete: ${selectedMotifPath}`);
+    updateStickyHorizontalScrollbar();
   } catch (err) {
     statusEl.attr("class", "status error").text(`Failed to load ${selectedMotifPath}`);
+    updateStickyHorizontalScrollbar();
     console.error(err);
   }
 }
@@ -987,4 +1026,5 @@ function initTopKMotifSlider() {
 initMotifSelector();
 initMatchedDistanceSlider();
 initTopKMotifSlider();
+initStickyHorizontalScrollbar();
 run();

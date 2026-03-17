@@ -21,13 +21,29 @@
       </div>
       <br>
       <div class="matched-slider-wrap">
-        <label for="matched-distance-slider">Max matched distance:</label>
+        <label for="matched-distance-slider">Max matched
+          <span
+            class="help-dashed-label"
+            data-tooltip="The lower the distance, 
+            the more similar a match is to an identified motif (pattern). 
+            By filtering out higher distance entries, 
+            you can focus on the more similar matches."
+            >distance</span
+          >:
+        </label>
         <input id="matched-distance-slider" type="range" min="0" max="10" step="0.01" value="10" />
         <span id="matched-distance-value">10 / 10</span>
       </div>
       <br>
       <div class="topk-slider-wrap">
-        <label for="topk-motif-slider">Show top k motifs:</label>
+        <label for="topk-motif-slider"
+          >Show
+          <span
+            class="help-dashed-label"
+            data-tooltip="Choose the number of motifs you want to display. Note that large number may lead to slow loading!"
+            >top motifs</span>
+          :</label
+        >
         <input id="topk-motif-slider" type="range" min="1" max="32" step="1" value="32" />
         <span id="topk-motif-value">32 / 32</span>
       </div>
@@ -37,13 +53,16 @@
       <section id="status" class="status">Loading data...</section>
       <section class="viz-section viz-scroll">
         <div class="viz-scroll-content">
-          <h2 class="section-title">Derived Values</h2>
+          <h2 class="section-title">Top Motifs</h2>
           <section id="charts" class="charts-grid"></section>
           <h2 class="section-title">Corresponding Sequences</h2>
           <section id="student-charts" class="charts-grid"></section>
         </div>
       </section>
     </main>
+    <div id="sticky-x-scroll" aria-label="Horizontal scrollbar">
+      <div id="sticky-x-scroll-inner"></div>
+    </div>
     <div id="tooltip" class="tooltip"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>

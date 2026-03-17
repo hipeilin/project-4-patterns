@@ -24,7 +24,7 @@ body {
 }
 
 main {
-  padding: 12px 20px 24px;
+  padding: 12px 20px 44px;
 }
 
 .status {
@@ -39,6 +39,25 @@ main {
 .viz-scroll {
   overflow-x: auto;
   padding-bottom: 8px;
+}
+
+#sticky-x-scroll {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;          /* was bottom: 0 */
+  bottom: auto;    /* optional, for clarity */
+  height: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #f5f7fb;
+  border-top: none;
+  border-bottom: 1px solid #d9e2ec; /* optional visual separator */
+  z-index: 999;
+}
+
+#sticky-x-scroll-inner {
+  height: 1px;
 }
 
 .viz-scroll-content {
@@ -195,6 +214,41 @@ main {
   min-width: 34px;
   font-weight: 700;
   color: #334e68;
+}
+
+.help-dashed-label {
+  position: relative;
+  display: inline-block;
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+.help-dashed-label::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  max-width: 320px;
+  width: max-content;
+  padding: 6px 8px;
+  border-radius: 3px;
+  background: #102a43;
+  color: #f0f4f8;
+  font-size: 14px;
+  font-weight: 300; 
+  line-height: 1.35;
+  box-shadow: 0 4px 12px rgba(16, 42, 67, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 1200;
+}
+
+.help-dashed-label:hover::after {
+  opacity: 1;
+  visibility: visible;
 }
 
 .topk-slider-wrap {
