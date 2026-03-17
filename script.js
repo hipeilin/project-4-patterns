@@ -2,14 +2,20 @@ const WINDOW_LENGTH = 31; // window_idx through window_idx + 30
 const CHART_WIDTH = 300;
 const CHART_HEIGHT = 100;
 const MARGIN = { top: 10, right: 12, bottom: 26, left: 38 };
+const DERIVED_METRIC_COLUMNS = [
+  "max_consecutive_same_source",
+  "max_consecutive_same_target",
+  "tracing_count",
+  "cycle_count",
+  "max_consecutive_same_category",
+  "sparsity"
+];
 
 const chartsContainer = d3.select("#charts");
 const studentChartsContainer = d3.select("#student-charts");
-const matchedChartsContainer = d3.select("#matched-charts");
 const statusEl = d3.select("#status");
 const globalLegendEl = d3.select("#global-legend");
 const tooltip = d3.select("#tooltip");
-const motifSelectEl = d3.select("#motif-select");
 const matchedDistanceSliderEl = d3.select("#matched-distance-slider");
 const matchedDistanceValueEl = d3.select("#matched-distance-value");
 const topKMotifSliderEl = d3.select("#topk-motif-slider");
@@ -20,13 +26,9 @@ const studentCache = new Map();
 let globalSeriesColumns = null;
 let globalColorScale = null;
 let currentRunId = 0;
-let matchedDistanceThreshold = Number(matchedDistanceSliderEl.property("value")) || 2;
+let matchedDistanceThreshold = Number(matchedDistanceSliderEl.property("value")) || 0.5;
 let topKMotifs = Number(topKMotifSliderEl.property("value")) || 32;
-
-const motifCsvOptions = [
-  { label: "motif_sparsity_only_freq.csv", path: "motifs/motif_sparsity_only_freq.csv" },
-  { label: "motif_sparsity_freq+idle.csv", path: "motifs/motif_sparsity_freq+idle.csv" },
-];
+const MOTIF_CSV_PATH = "motifs/motif.csv";
 
 const categoryConfig = [
   { name: "atmosphere", items: ["slot_atmosphere"], color: "#87BFFF" },
@@ -93,6 +95,12 @@ function buildWindowSlice(rows, startIndex) {
   return { start, slice };
 }
 
+function getPlottedSeriesValue(columnName, rawValue) {
+  const numeric = Number(rawValue);
+  if (!Number.isFinite(numeric)) return Number.NaN;
+  return columnName === "sparsity" ? 1 - numeric : numeric;
+}
+
 function ensureGlobalLegend(columns) {
   if (!columns.length || globalSeriesColumns) {
     return;
@@ -121,101 +129,63 @@ function centerScrollToMiddle(scrollEl) {
   scrollEl.scrollLeft = maxScrollLeft > 0 ? maxScrollLeft * 0.85 : 0;
 }
 
-function renderTimeseriesCard(motifRow, index, rows, columns, startIndex) {
+function renderTimeseriesCard(motifRow, index, rows, columns, startIndex, endIndex) {
   const card = chartsContainer.append("article").attr("class", "chart-card");
-  const formatScore = (value) => {
+  const rowIdx = Number(startIndex);
+  const targetRow = Number.isInteger(rowIdx) ? rows[rowIdx] : null;
+  const formatValue = (value, digits = 6) => {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return "N/A";
-    return Number(numeric.toFixed(2)).toString();
+    return Number(numeric.toFixed(digits)).toString();
   };
-  // const frequencyScore = formatScore(motifRow.frequency_score);
-  // const sequenceScore = formatScore(motifRow.sequence_score);
-  // const combinedScore = formatScore(motifRow.combined_score);
+  const formatPercent = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return "N/A";
+    return `${Number((numeric * 100).toFixed(2)).toString()}%`;
+  };
+  const metricValues = DERIVED_METRIC_COLUMNS.map((column) => {
+    if (!targetRow) return "N/A";
+    const value = Number(targetRow[column]);
+    return Number.isFinite(value) ? Number(value.toFixed(6)).toString() : "N/A";
+  });
 
-  const frequency = motifRow.frequency;
-  const sequence_count = motifRow.sequence_count;
   card.append("h3")
     .attr("class", "chart-title")
     .text(`${index + 1}. ${motifRow.filename}`);
   card.append("p")
     .attr("class", "chart-subtitle")
-    // .text(
-    //   `window_idx=${startIndex}, frequency_score=${frequencyScore}, sequence_score=${sequenceScore}, combined_score=${combinedScore}`
-    // );
-    .html(
-      `window_idx=${startIndex} <br> appeared ${frequency} times in total, in ${sequence_count} unique student(s)`
+    .attr("data-role", "derived-range-events")
+    .text(`@${startIndex}-${endIndex}`);
+  card.append("p")
+    .attr("class", "chart-subtitle")
+    .text(
+      `frequency=${formatValue(motifRow.frequency, 0)}, unique_count=${formatValue(motifRow.unique_count, 0)}, support=${formatPercent(motifRow.support)}`
     );
-  if (!rows.length || !columns.length) {
-    card.append("p").attr("class", "error").text("No data available for this window.");
-    return;
-  }
+  card.append("p")
+    .attr("class", "chart-subtitle")
+    .text(`[${metricValues.join(", ")}]`);
 
-  const svg = card
-    .append("svg")
-    .attr("class", "chart-svg")
-    .attr("viewBox", `0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`);
+  const meanMetrics = [
+    ["max_consecutive_same_source", motifRow.max_consecutive_same_source],
+    ["max_consecutive_same_target", motifRow.max_consecutive_same_target],
+    ["tracing_count", motifRow.tracing_count],
+    ["cycle_count", motifRow.cycle_count],
+    ["max_consecutive_same_category", motifRow.max_consecutive_same_category],
+    ["sparsity", motifRow.sparsity]
+  ];
+  const metricsTable = card.append("table").attr("class", "metrics-table");
+  const tbody = metricsTable.append("tbody");
+  const rowsSelection = tbody.selectAll("tr").data(meanMetrics).enter().append("tr");
+  rowsSelection
+    .append("td")
+    .attr("class", "metrics-label")
+    .text(([label]) => label);
+  rowsSelection
+    .append("td")
+    .attr("class", "metrics-value")
+    .text(([_label, value]) => formatPercent(value));
 
-  const plotWidth = CHART_WIDTH - MARGIN.left - MARGIN.right;
-  const plotHeight = CHART_HEIGHT - MARGIN.top - MARGIN.bottom;
-  const g = svg.append("g").attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
-
-  const series = columns.map((name) => ({
-    name,
-    values: rows.map((row, i) => ({
-      x: startIndex + i,
-      y: Number(row[name])
-    }))
-  }));
-
-  const x = d3
-    .scaleLinear()
-    .domain(d3.extent(rows, (_, i) => startIndex + i))
-    .range([0, plotWidth]);
-
-  const y = d3
-    .scaleLinear()
-    .domain([0, 1])
-    .range([plotHeight, 0]);
-
-  g.append("g")
-    .attr("class", "axis")
-    .attr("transform", `translate(0,${plotHeight})`)
-    .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format("d")));
-
-  g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4));
-
-  const line = d3
-    .line()
-    .defined((d) => Number.isFinite(d.y))
-    .x((d) => x(d.x))
-    .y((d) => y(d.y));
-
-  g.selectAll(".line")
-    .data(series)
-    .enter()
-    .append("path")
-    .attr("class", "line")
-    .attr("stroke", (d) => globalColorScale(d.name))
-    .attr("d", (d) => line(d.values))
-    .style("cursor", "pointer")
-    .on("mouseover", function onOver(event, d) {
-      g.selectAll(".line").attr("stroke-opacity", 0.2);
-      d3.select(this).attr("stroke-opacity", 1).attr("stroke-width", 3);
-      tooltip
-        .style("opacity", 1)
-        .html(`<strong>Dimension:</strong> ${d.name}`)
-        .style("left", `${event.clientX + 10}px`)
-        .style("top", `${event.clientY - 28}px`);
-    })
-    .on("mousemove", function onMove(event) {
-      tooltip
-        .style("left", `${event.clientX + 10}px`)
-        .style("top", `${event.clientY - 28}px`);
-    })
-    .on("mouseout", function onOut() {
-      g.selectAll(".line").attr("stroke-opacity", 1).attr("stroke-width", 2);
-      tooltip.style("opacity", 0);
-    });
+  return card;
 }
 
 function normalizeStudentRow(row, index) {
@@ -241,6 +211,20 @@ function extractStudentRowsForWindow(rows, windowIdx) {
 
   const upperStartBound = windowIdx + 60;
   return normalizedRows.filter((row) => row.startTime >= windowIdx && row.startTime < upperStartBound);
+}
+
+function extractStudentRowsForRange(rows, windowStart, windowEnd) {
+  const normalizedRows = rows
+    .map((row, index) => normalizeStudentRow(row, index))
+    .filter((row) => Number.isFinite(row.startTime) && Number.isFinite(row.endTime) && row.source && row.target);
+
+  const rangeStart = Number(windowStart);
+  const rangeEnd = Number(windowEnd);
+  if (!Number.isFinite(rangeStart)) return [];
+  if (!Number.isFinite(rangeEnd)) {
+    return normalizedRows.filter((row) => row.startTime >= rangeStart);
+  }
+  return normalizedRows.filter((row) => row.startTime >= rangeStart && row.startTime <= rangeEnd);
 }
 
 function parseMatchedMap(matchedValue) {
@@ -270,11 +254,13 @@ function normalizeMatchedEntries(matchedMap) {
     if (typeof value === "object" && value !== null && !Array.isArray(value)) {
       const fileName = sanitizeFileName(String(value.file_id ?? value.filename ?? key ?? "").trim());
       const windowIdx = Number(value.window_start);
+      const windowEnd = Number(value.window_end);
       const distance = Number(value.distance);
       if (fileName && Number.isFinite(windowIdx)) {
         normalized.push({
           fileName,
           windowIdx,
+          windowEnd: Number.isFinite(windowEnd) ? windowEnd : windowIdx + 60,
           distance: Number.isFinite(distance) ? distance : null
         });
       }
@@ -296,6 +282,7 @@ function normalizeMatchedEntries(matchedMap) {
           normalized.push({
             fileName,
             windowIdx,
+            windowEnd: windowIdx + 60,
             distance: Number.isFinite(distance) ? distance : null
           });
         }
@@ -310,26 +297,35 @@ async function collectMatchedGroups(matchedValue) {
   const matchedMap = parseMatchedMap(matchedValue);
   const groups = [];
   const normalizedEntries = normalizeMatchedEntries(matchedMap);
+  const formatMetricValue = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return "N/A";
+    return Number(numeric.toFixed(6)).toString();
+  };
   for (let i = 0; i < normalizedEntries.length; i += 1) {
     const matchItem = normalizedEntries[i];
     const fileName = matchItem.fileName;
     const windowIdx = Number(matchItem.windowIdx);
+    const windowEnd = Number(matchItem.windowEnd);
     const distance = Number(matchItem.distance);
     if (!fileName || !Number.isFinite(windowIdx)) continue;
 
     try {
       const studentRows = await loadStudentCsv(fileName);
       const sourceRows = await loadTimeseriesCsv(fileName);
-      const seriesColumns = coerceSeriesColumns(sourceRows);
       if (Number.isFinite(distance) && distance > matchedDistanceThreshold) {
         continue;
       }
-      const extracted = extractStudentRowsForWindow(studentRows, windowIdx);
-      const { slice: seriesRows } = buildWindowSlice(sourceRows, windowIdx);
+      const extracted = extractStudentRowsForRange(studentRows, windowIdx, windowEnd);
+      const targetMetricRow = Number.isInteger(windowIdx) ? sourceRows[windowIdx] : null;
+      const metricValues = DERIVED_METRIC_COLUMNS.map((column) => {
+        if (!targetMetricRow) return "N/A";
+        return formatMetricValue(targetMetricRow[column]);
+      });
       const normalizedRows = extracted.map((row, rowIdx) => {
         return {
           ...row,
-          id: `${fileName}_${windowIdx}_${row.id}_${rowIdx}`,
+          id: `${fileName}_${windowIdx}_${windowEnd}_${row.id}_${rowIdx}`,
           valid: Number(row.valid ?? 1)
         };
       });
@@ -337,10 +333,10 @@ async function collectMatchedGroups(matchedValue) {
         groups.push({
           fileName,
           windowIdx,
+          windowEnd,
           distance: Number.isFinite(distance) ? distance : null,
-          rows: normalizedRows,
-          seriesRows,
-          seriesColumns
+          metricValues,
+          rows: normalizedRows
         });
       }
     } catch (_err) {
@@ -349,81 +345,6 @@ async function collectMatchedGroups(matchedValue) {
   }
 
   return groups;
-}
-
-function renderMatchedTimeseries(container, fileName, windowIdx, rows, columns) {
-  if (!rows?.length || !columns?.length) {
-    container.append("p").attr("class", "error").text("No matched timeseries data.");
-    return;
-  }
-
-  const svg = container
-    .append("svg")
-    .attr("class", "chart-svg")
-    .attr("viewBox", `0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`);
-
-  const plotWidth = CHART_WIDTH - MARGIN.left - MARGIN.right;
-  const plotHeight = CHART_HEIGHT - MARGIN.top - MARGIN.bottom;
-  const g = svg.append("g").attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
-
-  const series = columns.map((name) => ({
-    name,
-    values: rows.map((row, i) => ({
-      x: windowIdx + i,
-      y: Number(row[name])
-    }))
-  }));
-
-  const yValues = series.flatMap((s) => s.values.map((d) => d.y)).filter((v) => Number.isFinite(v));
-  const yExtent = d3.extent(yValues);
-  const yMin = yExtent[0] ?? 0;
-  const yMax = yExtent[1] ?? 1;
-  const yPad = yMin === yMax ? 1 : (yMax - yMin) * 0.1;
-
-  const x = d3
-    .scaleLinear()
-    .domain(d3.extent(rows, (_, i) => windowIdx + i))
-    .range([0, plotWidth]);
-
-  const y = d3
-    .scaleLinear()
-    .domain([yMin - yPad, yMax + yPad])
-    .range([plotHeight, 0]);
-
-  g.append("g")
-    .attr("class", "axis")
-    .attr("transform", `translate(0,${plotHeight})`)
-    .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format("d")));
-
-  g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4));
-
-  const line = d3
-    .line()
-    .defined((d) => Number.isFinite(d.y))
-    .x((d) => x(d.x))
-    .y((d) => y(d.y));
-
-  const colorScale =
-    globalColorScale && columns.every((col) => globalColorScale.domain().includes(col))
-      ? globalColorScale
-      : d3
-          .scaleOrdinal()
-          .domain(columns)
-          .range(["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]);
-
-  g.selectAll(".line")
-    .data(series)
-    .enter()
-    .append("path")
-    .attr("class", "line")
-    .attr("stroke", (d) => colorScale(d.name))
-    .attr("stroke-width", 1.8)
-    .attr("d", (d) => line(d.values));
-
-  container
-    .append("p")
-    .attr("class", "chart-subtitle")
-    .text(`${fileName.replace(".csv", "")} time series @ ${windowIdx}`);
 }
 
 function formatDistanceValue(value) {
@@ -470,12 +391,12 @@ function renderStudentCard(motifRow, index, rows, windowIdx) {
     .text(`window_idx=${windowIdx}, # of events=${rows.length}`);
 
   const metrics = [
-    ["mean_max_consecutive_same_source", motifRow.mean_max_consecutive_same_source],
-    ["mean_max_consecutive_same_target", motifRow.mean_max_consecutive_same_target],
-    ["mean_tracing_count", motifRow.mean_tracing_count],
-    ["mean_cycle_count", motifRow.mean_cycle_count],
-    ["mean_max_consecutive_same_category", motifRow.mean_max_consecutive_same_category],
-    ["mean_sparsity", motifRow.mean_sparsity]
+    ["max_consecutive_same_source", motifRow.max_consecutive_same_source],
+    ["max_consecutive_same_target", motifRow.max_consecutive_same_target],
+    ["tracing_count", motifRow.tracing_count],
+    ["cycle_count", motifRow.cycle_count],
+    ["max_consecutive_same_category", motifRow.max_consecutive_same_category],
+    ["sparsity", motifRow.sparsity]
   ];
 
   const metricsTable = card.append("table").attr("class", "metrics-table");
@@ -704,14 +625,16 @@ function renderStudentCard(motifRow, index, rows, windowIdx) {
   centerScrollToMiddle(chartWrap.node());
 }
 
-function renderMatchedSubChart(container, rows, windowIdx) {
+function renderMatchedSubChart(container, rows, windowStart, windowEnd) {
   const margin = { top: 10, right: 16, bottom: 34, left: 120 };
-  const minStart = windowIdx;
-  const xDomainEnd = windowIdx + 60;
+  const minStart = Number(windowStart);
+  const parsedEnd = Number(windowEnd);
+  const xDomainEnd = Number.isFinite(parsedEnd) ? Math.max(minStart, parsedEnd) : minStart + 60;
+  const plotRows = rows.filter((d) => Number(d.endTime) <= xDomainEnd);
   const xDomainRange = xDomainEnd - minStart;
   const chartInnerWidth = Math.max(220, xDomainRange * 5);
 
-  const dynamicItems = Array.from(new Set(rows.flatMap((d) => [d.source, d.target]).filter(Boolean)));
+  const dynamicItems = Array.from(new Set(plotRows.flatMap((d) => [d.source, d.target]).filter(Boolean)));
   const extraItems = dynamicItems.filter((item) => !fixedEventOrder.includes(item));
   const categories = extraItems.length
     ? [...categoryConfig, { name: "other", items: extraItems, color: "#E4E7EB" }]
@@ -822,7 +745,7 @@ function renderMatchedSubChart(container, rows, windowIdx) {
     });
 
   svg.selectAll(".matched-path")
-    .data(rows)
+    .data(plotRows)
     .enter()
     .append("path")
     .attr("class", "matched-path")
@@ -840,7 +763,7 @@ function renderMatchedSubChart(container, rows, windowIdx) {
     });
 
   svg.selectAll(".matched-start-point")
-    .data(rows)
+    .data(plotRows)
     .enter()
     .append("circle")
     .attr("class", "matched-start-point")
@@ -851,7 +774,7 @@ function renderMatchedSubChart(container, rows, windowIdx) {
     .attr("opacity", 0.7);
 
   svg.selectAll(".matched-end-point")
-    .data(rows)
+    .data(plotRows)
     .enter()
     .append("circle")
     .attr("class", "matched-end-point")
@@ -863,10 +786,11 @@ function renderMatchedSubChart(container, rows, windowIdx) {
     .attr("stroke-width", 0.6);
 
   centerScrollToMiddle(chartWrap.node());
+  return plotRows.length;
 }
 
-function renderMatchedCard(motifRow, index, groups, windowIdx) {
-  const card = matchedChartsContainer.append("article").attr("class", "chart-card");
+function renderCorrespondingCard(motifRow, index, groups, windowIdx) {
+  const card = studentChartsContainer.append("article").attr("class", "chart-card");
  
   if (!groups.length) {
     card.append("p").attr("class", "error").text("No matching rows resolved from `matched` map.");
@@ -880,10 +804,13 @@ function renderMatchedCard(motifRow, index, groups, windowIdx) {
     rowBlock.append("p")
       .attr("class", "chart-subtitle")
       .html(
-        `<strong><u>${group.fileName.replace(".csv", "")}</u></strong> @ ${group.windowIdx} (${group.rows.length} events${distanceLabel})`
+        `<strong><u>${group.fileName.replace(".csv", "")}</u></strong> @ ${group.windowIdx}-${group.windowEnd} (${group.rows.length} events${distanceLabel})`
       );
-    renderMatchedTimeseries(rowBlock, group.fileName, group.windowIdx, group.seriesRows, group.seriesColumns);
-    renderMatchedSubChart(rowBlock, group.rows, group.windowIdx);
+    rowBlock
+      .append("p")
+      .attr("class", "chart-subtitle")
+      .text(`[${(group.metricValues || []).join(", ")}]`);
+    renderMatchedSubChart(rowBlock, group.rows, group.windowIdx, group.windowEnd);
   });
 }
 
@@ -893,19 +820,12 @@ function renderStudentErrorCard(index, fileName, message) {
   card.append("p").attr("class", "error").text(message);
 }
 
-function renderMatchedErrorCard(index, fileName, message) {
-  const card = matchedChartsContainer.append("article").attr("class", "chart-card");
-  card.append("h3").attr("class", "chart-title").text(`${index + 1}. ${fileName}`);
-  card.append("p").attr("class", "error").text(message);
-}
-
 async function run() {
   const runId = ++currentRunId;
-  const selectedMotifPath = motifSelectEl.node()?.value || motifCsvOptions[0].path;
+  const selectedMotifPath = MOTIF_CSV_PATH;
 
   chartsContainer.selectAll("*").remove();
   studentChartsContainer.selectAll("*").remove();
-  matchedChartsContainer.selectAll("*").remove();
   globalLegendEl.selectAll(".legend-item").remove();
   globalSeriesColumns = null;
   globalColorScale = null;
@@ -943,22 +863,28 @@ async function run() {
       const motifRow = motifRowsToRender[i];
       const fileName = sanitizeFileName(String(motifRow.filename || "").trim());
       const windowIdx = Number(motifRow.window_start);
+      const parsedWindowEnd = Number(motifRow.window_end);
+      const windowEnd = Number.isFinite(parsedWindowEnd) ? parsedWindowEnd : windowIdx + 60;
 
       if (!fileName || !Number.isInteger(windowIdx)) {
         const card = chartsContainer.append("article").attr("class", "chart-card");
         card.append("h3").attr("class", "chart-title").text(`${i + 1}. Invalid motif row`);
-        card.append("p").attr("class", "error").text("Missing filename or window_idx.");
-        renderStudentErrorCard(i, "Invalid motif row", "Missing filename or window_idx.");
-        renderMatchedErrorCard(i, "Invalid motif row", "Missing filename or window_idx.");
+        card.append("p").attr("class", "error").text("Missing filename or window_start.");
+        renderStudentErrorCard(i, "Invalid motif row", "Missing filename or window_start.");
         continue;
       }
 
+      let derivedCard = null;
       try {
         const sourceRows = await loadTimeseriesCsv(fileName);
-        const columns = coerceSeriesColumns(sourceRows);
-        ensureGlobalLegend(columns);
-        const { slice } = buildWindowSlice(sourceRows, windowIdx);
-        renderTimeseriesCard(motifRow, i, slice, columns, windowIdx);
+        derivedCard = renderTimeseriesCard(
+          motifRow,
+          i,
+          sourceRows,
+          DERIVED_METRIC_COLUMNS,
+          windowIdx,
+          windowEnd
+        );
       } catch (err) {
         const card = chartsContainer.append("article").attr("class", "chart-card");
         card.append("h3").attr("class", "chart-title").text(`${i + 1}. ${fileName}`);
@@ -966,20 +892,35 @@ async function run() {
         console.error(err);
       }
 
-      try {
-        const studentRows = await loadStudentCsv(fileName);
-        const extracted = extractStudentRowsForWindow(studentRows, windowIdx);
-        renderStudentCard(motifRow, i, extracted, windowIdx);
-      } catch (err) {
-        renderStudentErrorCard(i, fileName, `Failed to load file: student/${fileName}`);
-        console.error(err);
+      if (derivedCard) {
+        try {
+          const motifStudentRows = await loadStudentCsv(fileName);
+          const extractedMotifRows = extractStudentRowsForRange(motifStudentRows, windowIdx, windowEnd);
+          if (!extractedMotifRows.length) {
+            derivedCard
+              .append("p")
+              .attr("class", "error")
+              .text("No student rows found for this motif range.");
+          } else {
+            const plottedEventCount = renderMatchedSubChart(derivedCard, extractedMotifRows, windowIdx, windowEnd);
+            derivedCard
+              .select('[data-role="derived-range-events"]')
+              .text(`@${windowIdx}-${windowEnd}, ${plottedEventCount} events`);
+          }
+        } catch (err) {
+          derivedCard
+            .append("p")
+            .attr("class", "error")
+            .text(`Failed to load file: student/${fileName}`);
+          console.error(err);
+        }
       }
 
       try {
         const matchedGroups = await collectMatchedGroups(motifRow.matched);
-        renderMatchedCard(motifRow, i, matchedGroups, windowIdx);
+        renderCorrespondingCard(motifRow, i, matchedGroups, windowIdx);
       } catch (err) {
-        renderMatchedErrorCard(i, fileName, "Failed to parse or render matched mapping.");
+        renderStudentErrorCard(i, fileName, "Failed to parse or render matched mapping.");
         console.error(err);
       }
     }
@@ -989,22 +930,6 @@ async function run() {
     statusEl.attr("class", "status error").text(`Failed to load ${selectedMotifPath}`);
     console.error(err);
   }
-}
-
-function initMotifSelector() {
-  motifSelectEl
-    .selectAll("option")
-    .data(motifCsvOptions)
-    .enter()
-    .append("option")
-    .attr("value", (d) => d.path)
-    .text((d) => d.label);
-
-  motifSelectEl.property("value", motifCsvOptions[0].path);
-  motifSelectEl.on("change", () => {
-    statusEl.attr("class", "status").text("Loading selected motif file...");
-    run();
-  });
 }
 
 function initMatchedDistanceSlider() {
@@ -1035,7 +960,6 @@ function initTopKMotifSlider() {
   });
 }
 
-initMotifSelector();
 initMatchedDistanceSlider();
 initTopKMotifSlider();
 run();

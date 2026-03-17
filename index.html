@@ -8,24 +8,19 @@
   </head>
   <body>
     <header class="page-header">
-      <h1>Motif Windows</h1>
-      <p>Each column shows five metrics from <code>window_idx</code> to <code>window_idx + 30</code>.</p>
+      <h1>Motif Explorer</h1>
       <div id="global-legend" class="legend header-legend"></div>
-      <div class="motif-selector-wrap">
-        <label for="motif-select">Motif CSV:</label>
-        <select id="motif-select"></select>
-      </div>
       <br>
       <div class="matched-slider-wrap">
         <label for="matched-distance-slider">Max matched distance:</label>
-        <input id="matched-distance-slider" type="range" min="0" max="10" step="0.1" value="2" />
-        <span id="matched-distance-value">2 / 10</span>
+        <input id="matched-distance-slider" type="range" min="0" max="10" step="0.01" value="0.5" />
+        <span id="matched-distance-value">0.5 / 10</span>
       </div>
       <br>
       <div class="topk-slider-wrap">
         <label for="topk-motif-slider">Show top k motifs:</label>
-        <input id="topk-motif-slider" type="range" min="1" max="32" step="1" value="5" />
-        <span id="topk-motif-value">5 / 32</span>
+        <input id="topk-motif-slider" type="range" min="1" max="32" step="1" value="10" />
+        <span id="topk-motif-value">10 / 32</span>
       </div>
     </header>
 
@@ -33,12 +28,10 @@
       <section id="status" class="status">Loading data...</section>
       <section class="viz-section viz-scroll">
         <div class="viz-scroll-content">
-          <h2 class="section-title">Derived Timeseries</h2>
+          <h2 class="section-title">Derived Values</h2>
           <section id="charts" class="charts-grid"></section>
           <h2 class="section-title">Corresponding Sequences</h2>
           <section id="student-charts" class="charts-grid"></section>
-          <h2 class="section-title">Matched Sequences</h2>
-          <section id="matched-charts" class="charts-grid"></section>
         </div>
       </section>
     </main>
