@@ -200,11 +200,11 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex, endInd
   card.append("p")
     .attr("class", "chart-subtitle")
     .attr("data-role", "derived-range-events")
-    .text(`@${startIndex}-${endIndex}`);
+    .text(`Time window: ${startIndex}-${endIndex} s`);
   card.append("p")
     .attr("class", "chart-subtitle")
-    .text(
-      `frequency=${formatValue(motifRow.frequency, 0)}, unique_count=${formatValue(motifRow.unique_count, 0)}, support=${formatPercent(motifRow.support)}`
+    .html(
+      `<span class="help-dashed-label" data-tooltip="The total number of times this motif has been found in sequences. Note that there can be multiple matches in the same sequence!">frequency</span>=${formatValue(motifRow.frequency, 0)}, <span class="help-dashed-label" data-tooltip="The total number of unique sequences this motif was found.">unique_count</span>=${formatValue(motifRow.unique_count, 0)}, <span class="help-dashed-label" data-tooltip="Measure how strong this motif is. The score: # of unique_count / total number of participants.">support</span>=${formatPercent(motifRow.support)}`
     );
   card.append("p")
     .attr("class", "chart-subtitle")
@@ -957,7 +957,7 @@ async function run() {
             const plottedEventCount = renderMatchedSubChart(derivedCard, extractedMotifRows, windowIdx, windowEnd);
             derivedCard
               .select('[data-role="derived-range-events"]')
-              .text(`@${windowIdx}-${windowEnd}, ${plottedEventCount} events`);
+              .text(`Time window: @${windowIdx}-${windowEnd} s, contains ${plottedEventCount} events`);
           }
         } catch (err) {
           derivedCard
