@@ -16,6 +16,7 @@ const studentChartsContainer = d3.select("#student-charts");
 const statusEl = d3.select("#status");
 const globalLegendEl = d3.select("#global-legend");
 const tooltip = d3.select("#tooltip");
+const motifSelectEl = d3.select("#motif-select");
 const matchedDistanceSliderEl = d3.select("#matched-distance-slider");
 const matchedDistanceValueEl = d3.select("#matched-distance-value");
 const topKMotifSliderEl = d3.select("#topk-motif-slider");
@@ -26,9 +27,16 @@ const studentCache = new Map();
 let globalSeriesColumns = null;
 let globalColorScale = null;
 let currentRunId = 0;
-let matchedDistanceThreshold = Number(matchedDistanceSliderEl.property("value")) || 0.5;
-let topKMotifs = Number(topKMotifSliderEl.property("value")) || 32;
-const MOTIF_CSV_PATH = "motifs/motif.csv";
+let resetSlidersToMaxOnNextRun = false;
+let matchedDistanceThreshold =
+  Number(matchedDistanceSliderEl.property("value")) ||
+  Number(matchedDistanceSliderEl.attr("max")) ||
+  10;
+let topKMotifs =
+  Number(topKMotifSliderEl.property("value")) ||
+  Number(topKMotifSliderEl.attr("max")) ||
+  32;
+const MOTIF_CSV_OPTIONS = ["motifs/motif_ed.csv", "motifs/motif_cos.csv"];
 
 const categoryConfig = [
   { name: "atmosphere", items: ["slot_atmosphere"], color: "#87BFFF" },
@@ -822,7 +830,7 @@ function renderStudentErrorCard(index, fileName, message) {
 
 async function run() {
   const runId = ++currentRunId;
-  const selectedMotifPath = MOTIF_CSV_PATH;
+  const selectedMotifPath = motifSelectEl.property("value") || MOTIF_CSV_OPTIONS[0];
 
   chartsContainer.selectAll("*").remove();
   studentChartsContainer.selectAll("*").remove();
@@ -836,7 +844,10 @@ async function run() {
 
     const motifCount = motifRows.length;
     topKMotifSliderEl.attr("max", Math.max(1, motifCount));
-    if (topKMotifs > motifCount) {
+    if (resetSlidersToMaxOnNextRun) {
+      topKMotifs = Math.max(1, motifCount);
+      topKMotifSliderEl.property("value", topKMotifs);
+    } else if (topKMotifs > motifCount) {
       topKMotifs = motifCount;
       topKMotifSliderEl.property("value", topKMotifs);
     }
@@ -849,11 +860,15 @@ async function run() {
     const maxDistance = computeMaxMatchedDistance(motifRows);
     const sliderMax = maxDistance > 0 ? Number(maxDistance.toFixed(2)) : 10;
     matchedDistanceSliderEl.attr("max", sliderMax);
-    if (matchedDistanceThreshold > sliderMax) {
+    if (resetSlidersToMaxOnNextRun) {
+      matchedDistanceThreshold = sliderMax;
+      matchedDistanceSliderEl.property("value", sliderMax);
+    } else if (matchedDistanceThreshold > sliderMax) {
       matchedDistanceThreshold = sliderMax;
       matchedDistanceSliderEl.property("value", sliderMax);
     }
     updateMatchedDistanceLabel();
+    resetSlidersToMaxOnNextRun = false;
 
     const motifRowsToRender = motifRows.slice(0, topKMotifs);
     statusEl.text(`Loaded ${selectedMotifPath} (${motifRowsToRender.length}/${motifRows.length} rows). Rendering chart rows...`);
@@ -932,6 +947,15 @@ async function run() {
   }
 }
 
+function initMotifSelector() {
+  motifSelectEl.property("value", MOTIF_CSV_OPTIONS[0]);
+  motifSelectEl.on("change", () => {
+    resetSlidersToMaxOnNextRun = true;
+    statusEl.attr("class", "status").text("Loading selected motif file...");
+    run();
+  });
+}
+
 function initMatchedDistanceSlider() {
   updateMatchedDistanceLabel();
   matchedDistanceSliderEl.on("input", () => {
@@ -960,6 +984,7 @@ function initTopKMotifSlider() {
   });
 }
 
+initMotifSelector();
 initMatchedDistanceSlider();
 initTopKMotifSlider();
 run();
