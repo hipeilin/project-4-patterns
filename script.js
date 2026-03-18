@@ -1,4 +1,5 @@
 const WINDOW_LENGTH = 31; // window_idx through window_idx + 30
+const MAREY_WINDOW_SPAN = 31;
 const CHART_WIDTH = 300;
 const CHART_HEIGHT = 100;
 const MARGIN = { top: 10, right: 12, bottom: 26, left: 38 };
@@ -653,13 +654,12 @@ function normalizeMatchedEntries(matchedMap) {
     if (typeof value === "object" && value !== null && !Array.isArray(value)) {
       const fileName = sanitizeFileName(String(value.file_id ?? value.filename ?? key ?? "").trim());
       const windowIdx = Number(value.window_start);
-      const windowEnd = Number(value.window_end);
       const distance = Number(value.distance);
       if (fileName && Number.isFinite(windowIdx)) {
         normalized.push({
           fileName,
           windowIdx,
-          windowEnd: Number.isFinite(windowEnd) ? windowEnd : windowIdx + 60,
+          windowEnd: windowIdx + MAREY_WINDOW_SPAN,
           distance: Number.isFinite(distance) ? distance : null
         });
       }
@@ -681,7 +681,7 @@ function normalizeMatchedEntries(matchedMap) {
           normalized.push({
             fileName,
             windowIdx,
-            windowEnd: windowIdx + 60,
+            windowEnd: windowIdx + MAREY_WINDOW_SPAN,
             distance: Number.isFinite(distance) ? distance : null
           });
         }
@@ -781,7 +781,7 @@ function renderMatchedSubChart(container, rows, windowStart, windowEnd) {
   const margin = { top: 10, right: 16, bottom: 34, left: 120 };
   const minStart = Number(windowStart);
   const parsedEnd = Number(windowEnd);
-  const xDomainEnd = Number.isFinite(parsedEnd) ? Math.max(minStart, parsedEnd) : minStart + 60;
+  const xDomainEnd = Number.isFinite(parsedEnd) ? Math.max(minStart, parsedEnd) : minStart + 30;
   const plotRows = rows.filter((d) => Number(d.endTime) <= xDomainEnd);
   const xDomainRange = xDomainEnd - minStart;
   const chartInnerWidth = Math.max(220, xDomainRange * 5);
@@ -1026,8 +1026,7 @@ async function run() {
       const motifRow = motifRowsToRender[i];
       const fileName = sanitizeFileName(String(motifRow.filename || "").trim());
       const windowIdx = Number(motifRow.window_start);
-      const parsedWindowEnd = Number(motifRow.window_end);
-      const windowEnd = Number.isFinite(parsedWindowEnd) ? parsedWindowEnd : windowIdx + 60;
+      const windowEnd = windowIdx + MAREY_WINDOW_SPAN;
 
       if (!fileName || !Number.isInteger(windowIdx)) {
         const card = chartsContainer.append("article").attr("class", "chart-card");
