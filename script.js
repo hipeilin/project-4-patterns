@@ -41,6 +41,7 @@ let topKMotifs =
   Number(topKMotifSliderEl.attr("max")) ||
   32;
 const MOTIF_CSV_OPTIONS = ["motifs/motif_ed.csv", "motifs/motif_cos.csv", "motifs/motif_merged.csv"];
+const DEFAULT_MOTIF_CSV_PATH = "motifs/motif_merged.csv";
 
 const categoryConfig = [
   { name: "atmosphere", items: ["slot_atmosphere"], color: "#87BFFF" },
@@ -628,7 +629,7 @@ function renderStudentErrorCard(index, fileName, message) {
 
 async function run() {
   const runId = ++currentRunId;
-  const selectedMotifPath = motifSelectEl.property("value") || MOTIF_CSV_OPTIONS[0];
+  const selectedMotifPath = motifSelectEl.property("value") || DEFAULT_MOTIF_CSV_PATH;
 
   chartsContainer.selectAll("*").remove();
   studentChartsContainer.selectAll("*").remove();
@@ -748,7 +749,7 @@ async function run() {
 }
 
 function initMotifSelector() {
-  motifSelectEl.property("value", MOTIF_CSV_OPTIONS[0]);
+  motifSelectEl.property("value", DEFAULT_MOTIF_CSV_PATH);
   motifSelectEl.on("change", () => {
     resetSlidersToMaxOnNextRun = true;
     statusEl.attr("class", "status").text("Loading selected motif file...");
