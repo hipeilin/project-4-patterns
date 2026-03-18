@@ -347,6 +347,126 @@ function renderHalfDonutThumbnail(container, motifRow, options = {}) {
   }
 }
 
+function renderHalfDonutThumbnail(container, motifRow, options = {}) {
+  const scale = Number.isFinite(Number(options.scale)) ? Number(options.scale) : 1;
+  const wrapperClass = options.wrapperClass || "motif-thumbnail";
+  const compactFilledOnly = Boolean(options.compactFilledOnly);
+  const barWidth = 60;
+  const barHeight = 10;
+  const barGap = 0;
+
+  const toUnit = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.max(0, Math.min(1, numeric));
+  };
+
+  const rows = [
+    { key: "max_consecutive_same_source", value: toUnit(motifRow.max_consecutive_same_source), color: THUMBNAIL_COLORS[0] },
+    { key: "max_consecutive_same_target", value: toUnit(motifRow.max_consecutive_same_target), color: THUMBNAIL_COLORS[1] },
+    {
+      key: "tracing_count_cycle_count",
+      value: toUnit(motifRow.tracing_count),
+      color: THUMBNAIL_COLORS[2],
+      overlayValue: toUnit(motifRow.cycle_count),
+      overlayColor: "#d67d09"
+    },
+    { key: "max_consecutive_same_category", value: toUnit(motifRow.max_consecutive_same_category), color: THUMBNAIL_COLORS[3] },
+    { key: "sparsity", value: toUnit(motifRow.sparsity), color: THUMBNAIL_COLORS[4] },
+    { key: "correctness", value: toUnit(motifRow.correctness), color: "#2ca02c" }
+  ];
+
+  const hasVisibleFill = (row) => {
+    const baseValue = Number(row.value) || 0;
+    const overlayValue = Number(row.overlayValue) || 0;
+    if (row.key === "correctness") {
+      // correctness row is split into green (value) + red (1 - value)
+      return baseValue > 0.000001 || (1 - baseValue) > 0.000001;
+    }
+    return baseValue > 0.000001 || overlayValue > 0.000001;
+  };
+  const activeRows = compactFilledOnly ? rows.filter(hasVisibleFill) : rows;
+  const safeRows = activeRows.length ? activeRows : rows.slice(0, 1);
+  const width = barWidth;
+  const height = safeRows.length * barHeight + (safeRows.length - 1) * barGap;
+
+  const wrap = container
+    .append("div")
+    .attr("class", wrapperClass)
+    .style("width", `${width * scale}px`)
+    .style("height", `${height * scale}px`)
+    
+  const svg = wrap
+    .append("svg")
+    .attr("class", "motif-thumbnail-svg")
+    .attr("viewBox", `0 0 ${width} ${height}`)
+    .style("width", `${width * scale}px`)
+    .style("height", `${height * scale}px`);
+
+  svg.selectAll(".thumb-bar-bg")
+    .data(safeRows)
+    .enter()
+    .append("rect")
+    .attr("class", "thumb-bar-bg")
+    .attr("x", 0)
+    .attr("y", (_d, i) => i * (barHeight + barGap))
+    .attr("width", barWidth)
+    .attr("height", barHeight)
+    .attr("fill", "#f7f7f7")
+    .attr("stroke", "#ccc")
+    .attr("stroke-width", 1)
+    .attr("stroke-opacity", 0.3);
+
+  svg.selectAll(".thumb-bar-value")
+    .data(safeRows)
+    .enter()
+    .append("rect")
+    .attr("class", "thumb-bar-value")
+    .attr("x", 0)
+    .attr("y", (_d, i) => i * (barHeight + barGap))
+    .attr("width", (d) => d.value * barWidth)
+    .attr("height", barHeight)
+    .attr("fill", (d) => d.color)
+
+  const correctnessRows = safeRows.filter((d) => d.key === "correctness");
+  svg.selectAll(".thumb-bar-correctness-red")
+    .data(correctnessRows)
+    .enter()
+    .append("rect")
+    .attr("class", "thumb-bar-correctness-red")
+    .attr("x", (d) => d.value * barWidth)
+    .attr("y", (d) => safeRows.findIndex((row) => row.key === d.key) * (barHeight + barGap))
+    .attr("width", (d) => (1 - d.value) * barWidth)
+    .attr("height", barHeight)
+    .attr("fill", "#f26364");
+
+  const overlayRows = safeRows.filter((d) => Number.isFinite(d.overlayValue));
+  svg.selectAll(".thumb-bar-overlay")
+    .data(overlayRows)
+    .enter()
+    .append("rect")
+    .attr("class", "thumb-bar-overlay")
+    .attr("x", 0)
+    .attr("y", (d) => safeRows.findIndex((row) => row.key === d.key) * (barHeight + barGap))
+    .attr("width", (d) => (d.overlayValue || 0) * barWidth)
+    .attr("height", barHeight)
+    .attr("fill", (d) => d.overlayColor || "#d67d09")
+    .attr("opacity", 0.85);
+
+  // Draw border last so it stays visible above bars.
+  svg.append("rect")
+    .attr("class", "thumb-group-border")
+    .attr("x", 0.5)
+    .attr("y", 0.5)
+    .attr("width", Math.max(0, barWidth - 1))
+    .attr("height", Math.max(0, height - 1))
+    .attr("rx", 2)
+    .attr("ry", 2)
+    .attr("fill", "none")
+    .attr("stroke", "#6b7c93")
+    .attr("stroke-width", 1);
+}
+
 function renderAllMotifThumbnails(motifRows) {
   allMotifThumbnailsEl.selectAll("*").remove();
   const rowsToShow = (motifRows || []).slice(0, 50);
