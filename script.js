@@ -10,6 +10,14 @@ const DERIVED_METRIC_COLUMNS = [
   "max_consecutive_same_category",
   "sparsity"
 ];
+const THUMBNAIL_METRIC_COLUMNS = [
+  "max_consecutive_same_source",
+  "max_consecutive_same_target",
+  "tracing_count",
+  "max_consecutive_same_category",
+  "sparsity"
+];
+const THUMBNAIL_COLORS = ["#87CEEB", "#c29cff", "#FFC67D", "#8385f7", "#ccc"];
 
 const chartsContainer = d3.select("#charts");
 const studentChartsContainer = d3.select("#student-charts");
@@ -24,6 +32,9 @@ const matchedDistanceSliderEl = d3.select("#matched-distance-slider");
 const matchedDistanceValueEl = d3.select("#matched-distance-value");
 const topKMotifSliderEl = d3.select("#topk-motif-slider");
 const topKMotifValueEl = d3.select("#topk-motif-value");
+const thumbnailLegendEl = d3.select("#thumbnail-legend");
+const allMotifThumbnailsEl = d3.select("#all-motif-thumbnails");
+const stackFilledThumbnailsToggleEl = d3.select("#stack-filled-thumbnails-toggle");
 
 const multiTsCache = new Map();
 const studentCache = new Map();
@@ -32,6 +43,8 @@ let globalColorScale = null;
 let currentRunId = 0;
 let resetSlidersToMaxOnNextRun = false;
 let isSyncingHorizontalScroll = false;
+let latestMotifRows = [];
+let stackFilledThumbnails = Boolean(stackFilledThumbnailsToggleEl.property("checked"));
 let matchedDistanceThreshold =
   Number(matchedDistanceSliderEl.property("value")) ||
   Number(matchedDistanceSliderEl.attr("max")) ||
@@ -40,7 +53,7 @@ let topKMotifs =
   Number(topKMotifSliderEl.property("value")) ||
   Number(topKMotifSliderEl.attr("max")) ||
   32;
-const MOTIF_CSV_OPTIONS = ["motifs/motif_ed.csv", "motifs/motif_cos.csv", "motifs/motif_merged.csv"];
+const MOTIF_CSV_OPTIONS = ["motifs/motif_ed.csv", "motifs/motif_merged.csv"];
 const DEFAULT_MOTIF_CSV_PATH = "motifs/motif_merged.csv";
 
 const categoryConfig = [
@@ -132,14 +145,225 @@ function ensureGlobalLegend(columns) {
     .append("div")
     .attr("class", "legend-item");
 
-  legendItems.append("span").attr("class", "legend-swatch").style("background-color", (d) => globalColorScale(d));
-  legendItems.append("span").text((d) => d);
+  legendItems.append("span")
+    .attr("class", "legend-swatch")
+    .style("background-color", (d) => globalColorScale(d));
+  legendItems.append("span")
+    .text((d) => d);
+}
+
+function ensureThumbnailLegend() {
+  thumbnailLegendEl.selectAll(".legend-item").remove();
+  const items = [
+    { metric: "max_consecutive_same_source", color: THUMBNAIL_COLORS[0] },
+    { metric: "max_consecutive_same_target", color: THUMBNAIL_COLORS[1] },
+    { metric: "tracing_count", color: THUMBNAIL_COLORS[2] },
+    { metric: "cycle", color: "#d67d09" }, // added right after tracing
+    { metric: "max_consecutive_same_category", color: THUMBNAIL_COLORS[3] },
+    { metric: "sparsity", color: THUMBNAIL_COLORS[4] }
+  ];
+  const legendItems = thumbnailLegendEl
+    .selectAll(".legend-item")
+    .data(items)
+    .enter()
+    .append("div")
+    .attr("class", "legend-item");
+
+  legendItems
+    .append("span")
+    .attr("class", "legend-swatch")
+    .style("background-color", (d) => d.color);
+  legendItems.append("span").text((d) => d.metric);
 }
 
 function centerScrollToMiddle(scrollEl) {
   if (!scrollEl) return;
   const maxScrollLeft = scrollEl.scrollWidth - scrollEl.clientWidth;
   scrollEl.scrollLeft = maxScrollLeft > 0 ? maxScrollLeft * 0.85 : 0;
+}
+
+function renderHalfDonutThumbnail(container, motifRow, options = {}) {
+  const scale = Number.isFinite(Number(options.scale)) ? Number(options.scale) : 1;
+  const wrapperClass = options.wrapperClass || "motif-thumbnail";
+  const compactFilledOnly = Boolean(options.compactFilledOnly);
+  const width = 84;
+  const height = 78;
+  const icecreamX = 22;
+  const icecreamY = 4;
+  const icecreamWidth = 40;
+  const maxIcecreamHeight = 52;
+  const woodenStickWidth = 8;
+  const woodenStickHeight = 18;
+  const sectionGap = 0;
+  const maxSectionCount = THUMBNAIL_METRIC_COLUMNS.length;
+  const baseSectionHeight = (maxIcecreamHeight - sectionGap * (maxSectionCount - 1)) / maxSectionCount;
+  const sourceSegments = THUMBNAIL_METRIC_COLUMNS.map((key, i) => {
+    const raw = Number(motifRow[key]);
+    const normalized = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0;
+    return {
+      key,
+      value: normalized,
+      color: THUMBNAIL_COLORS[i]
+    };
+  });
+  const activeSegments =
+    compactFilledOnly ? sourceSegments.filter((segment) => segment.value > 0) : sourceSegments;
+  const sectionCount = Math.max(1, activeSegments.length);
+  const sectionHeight = baseSectionHeight;
+  const icecreamHeight = sectionCount * sectionHeight + sectionGap * (sectionCount - 1);
+  const icecreamBottomY = icecreamY + maxIcecreamHeight;
+  const stackTopY = icecreamBottomY - icecreamHeight;
+  const segments = activeSegments.map((segment, i) => {
+    const y = stackTopY + i * (sectionHeight + sectionGap);
+    const fillWidth = icecreamWidth * segment.value;
+    const fillX = icecreamX + (icecreamWidth - fillWidth) / 2;
+    return { ...segment, y, fillX, fillWidth };
+  });
+  const cycleCountRaw = Number(motifRow.cycle_count);
+  const cycleCountNormalized = Number.isFinite(cycleCountRaw)
+    ? Math.max(0, Math.min(1, cycleCountRaw))
+    : 0;
+  const correctnessRaw = Number(motifRow.correctness);
+  const correctnessNormalized = Number.isFinite(correctnessRaw)
+    ? Math.max(0, Math.min(1, correctnessRaw))
+    : 0;
+
+  const wrap = container
+    .append("div")
+    .attr("class", wrapperClass)
+    .style("width", `${width * scale}px`)
+    .style("height", `${height * scale}px`);
+  const svg = wrap
+    .append("svg")
+    .attr("class", "motif-thumbnail-svg")
+    .attr("viewBox", `0 0 ${width} ${height}`)
+    .style("width", `${width * scale}px`)
+    .style("height", `${height * scale}px`);
+  const rotateGroup = svg
+    .append("g")
+    .attr(
+      "transform",
+      `rotate(-20 ${icecreamX + icecreamWidth / 2} ${icecreamY + maxIcecreamHeight / 2})`
+    );
+
+  const roundedRectPath = (x, y, w, h, topRadius, bottomRadius) => {
+    const rt = Math.max(0, Math.min(topRadius, w / 2, h / 2));
+    const rb = Math.max(0, Math.min(bottomRadius, w / 2, h / 2));
+    return [
+      `M ${x + rt} ${y}`,
+      `H ${x + w - rt}`,
+      rt > 0 ? `Q ${x + w} ${y} ${x + w} ${y + rt}` : `L ${x + w} ${y}`,
+      `V ${y + h - rb}`,
+      rb > 0 ? `Q ${x + w} ${y + h} ${x + w - rb} ${y + h}` : `L ${x + w} ${y + h}`,
+      `H ${x + rb}`,
+      rb > 0 ? `Q ${x} ${y + h} ${x} ${y + h - rb}` : `L ${x} ${y + h}`,
+      `V ${y + rt}`,
+      rt > 0 ? `Q ${x} ${y} ${x + rt} ${y}` : `L ${x} ${y}`,
+      "Z"
+    ].join(" ");
+  };
+
+  rotateGroup.append("rect")
+    .attr("class", "thumb-icecream-rect")
+    .attr("x", icecreamX)
+    .attr("y", stackTopY)
+    .attr("width", icecreamWidth)
+    .attr("height", icecreamHeight)
+    .attr("rx", 4)
+    .attr("ry", 4)
+    .attr("fill", "none")
+    .attr("stroke", "#5f6d7a")
+    .attr("stroke-width", 1);
+
+  const woodenStickX = icecreamX + (icecreamWidth - woodenStickWidth) / 2;
+  const woodenStickY = icecreamBottomY;
+  const greenHeight = woodenStickHeight * correctnessNormalized;
+  const redHeight = woodenStickHeight - greenHeight;
+
+  rotateGroup.append("rect")
+    .attr("class", "thumb-wooden-stick-red")
+    .attr("x", woodenStickX)
+    .attr("y", woodenStickY)
+    .attr("width", woodenStickWidth)
+    .attr("height", redHeight)
+    .attr("fill", "#f23353");
+
+  rotateGroup.append("rect")
+    .attr("class", "thumb-wooden-stick-green")
+    .attr("x", woodenStickX)
+    .attr("y", woodenStickY + redHeight)
+    .attr("width", woodenStickWidth)
+    .attr("height", greenHeight)
+    .attr("fill", "#4cad97");
+
+  rotateGroup.append("rect")
+    .attr("class", "thumb-wooden-stick-rect")
+    .attr("x", woodenStickX)
+    .attr("y", woodenStickY)
+    .attr("width", woodenStickWidth)
+    .attr("height", woodenStickHeight)
+    .attr("rx", 1)
+    .attr("ry", 1)
+    .attr("fill", "none")
+    .attr("stroke", "#ababab")
+    .attr("stroke-width", 1);
+
+  rotateGroup.selectAll(".thumb-segment-bg")
+    .data(segments)
+    .enter()
+    .append("path")
+    .attr("class", "thumb-segment-bg")
+    .attr("d", (_d, i) => {
+      const topRadius = i === 0 ? 4 : 0;
+      const bottomRadius = i === segments.length - 1 ? 4 : 0;
+      return roundedRectPath(icecreamX, segments[i].y, icecreamWidth, sectionHeight, topRadius, bottomRadius);
+    })
+    .attr("fill", "#fff")
+    .attr("stroke", "#ccc")
+    .attr("stroke-width", 1);
+
+  rotateGroup.selectAll(".thumb-segment-value")
+    .data(segments)
+    .enter()
+    .append("rect")
+    .attr("class", "thumb-segment-value")
+    .attr("x", (d) => d.fillX)
+    .attr("y", (d) => d.y)
+    .attr("width", (d) => d.fillWidth)
+    .attr("height", sectionHeight)
+    .attr("fill", (d) => d.color);
+
+  const tracingSegment = segments.find((segment) => segment.key === "tracing_count");
+  if (tracingSegment && cycleCountNormalized > 0) {
+    const centerX = icecreamX + icecreamWidth / 2;
+    const fillSpanWidth = icecreamWidth * cycleCountNormalized;
+    rotateGroup.append("rect")
+      .attr("class", "thumb-tracing-cycle-fill")
+      .attr("x", centerX - fillSpanWidth / 2)
+      .attr("y", tracingSegment.y)
+      .attr("width", fillSpanWidth)
+      .attr("height", sectionHeight)
+      .attr("fill", "#d67d09")
+  }
+}
+
+function renderAllMotifThumbnails(motifRows) {
+  allMotifThumbnailsEl.selectAll("*").remove();
+  const rowsToShow = (motifRows || []).slice(0, 50);
+  rowsToShow.forEach((motifRow) => {
+    renderHalfDonutThumbnail(allMotifThumbnailsEl, motifRow, {
+      scale: 0.7,
+      wrapperClass: "motif-thumbnail motif-thumbnail-mini",
+      compactFilledOnly: stackFilledThumbnails
+    });
+  });
+}
+
+function initThumbnailOptions() {
+  stackFilledThumbnailsToggleEl.on("change", () => {
+    stackFilledThumbnails = Boolean(stackFilledThumbnailsToggleEl.property("checked"));
+    renderAllMotifThumbnails(latestMotifRows);
+  });
 }
 
 function updateStickyHorizontalScrollbar() {
@@ -198,6 +422,7 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex, endInd
   card.append("h3")
     .attr("class", "chart-title")
     .text(`${index + 1}. ${motifRow.filename}`);
+  renderHalfDonutThumbnail(card, motifRow);
   card.append("p")
     .attr("class", "chart-subtitle")
     .attr("data-role", "derived-range-events")
@@ -598,7 +823,7 @@ function renderMatchedSubChart(container, rows, windowStart, windowEnd) {
 
 function renderCorrespondingCard(motifRow, index, groups, windowIdx) {
   const card = studentChartsContainer.append("article").attr("class", "chart-card");
- 
+
   if (!groups.length) {
     card.append("p").attr("class", "error").text("No matching rows resolved from `matched` map.");
     return;
@@ -634,12 +859,16 @@ async function run() {
   chartsContainer.selectAll("*").remove();
   studentChartsContainer.selectAll("*").remove();
   globalLegendEl.selectAll(".legend-item").remove();
+  ensureThumbnailLegend();
+  allMotifThumbnailsEl.selectAll("*").remove();
   globalSeriesColumns = null;
   globalColorScale = null;
 
   try {
     const motifRows = await d3.csv(selectedMotifPath, d3.autoType);
     if (runId !== currentRunId) return;
+    latestMotifRows = motifRows;
+    renderAllMotifThumbnails(motifRows);
 
     const motifCount = motifRows.length;
     topKMotifSliderEl.attr("max", Math.max(1, motifCount));
@@ -788,5 +1017,6 @@ function initTopKMotifSlider() {
 initMotifSelector();
 initMatchedDistanceSlider();
 initTopKMotifSlider();
+initThumbnailOptions();
 initStickyHorizontalScrollbar();
 run();

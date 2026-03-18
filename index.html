@@ -15,7 +15,6 @@
         <label for="motif-select">Motif CSV:</label>
         <select id="motif-select">
           <option value="motifs/motif_ed.csv">motif_ed.csv</option>
-          <option value="motifs/motif_cos.csv">motif_cos.csv</option>
           <option value="motifs/motif_merged.csv" selected>motif_merged.csv</option>
         </select>
       </div>
@@ -53,6 +52,15 @@
       <section id="status" class="status">Loading data...</section>
       <section class="viz-section viz-scroll">
         <div class="viz-scroll-content">
+          <div id="thumbnail-legend" class="legend thumbnail-legend"></div>
+          <div class="thumbnail-options">
+            <label for="stack-filled-thumbnails-toggle">
+              <input id="stack-filled-thumbnails-toggle" type="checkbox" />
+              Stack only filled inner sections
+            </label>
+          </div>
+          <h2 class="section-title">Scoopbook</h2>
+          <div id="all-motif-thumbnails" class="all-motif-thumbnails"></div>
           <h2 class="section-title">Top Motifs</h2>
           <section id="charts" class="charts-grid"></section>
           <h2 class="section-title">Corresponding Sequences</h2>

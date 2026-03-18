@@ -91,6 +91,18 @@ main {
   font-size: 14px;
 }
 
+.motif-thumbnail {
+  display: flex;
+  justify-content: center;
+  margin: 2px 0 8px;
+}
+
+.motif-thumbnail-svg {
+  width: 84px;
+  height: 110px;
+  display: block;
+}
+
 .chart-subtitle {
   margin: 0 0 8px;
   color: #627d98;
@@ -181,6 +193,36 @@ main {
 
 .header-legend {
   margin-top: 10px;
+}
+
+.thumbnail-legend {
+  margin: 0 0 8px;
+  column-gap: 24px;
+  row-gap: 10px;
+  font-size: 12px;
+}
+
+.all-motif-thumbnails {
+  display: grid;
+  grid-template-columns: repeat(10, min-content);
+  gap: 4px 6px;
+  margin: 0 0 10px;
+}
+
+.motif-thumbnail-mini {
+  margin: 0;
+}
+
+.thumbnail-options {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #486581;
+}
+
+.thumbnail-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .motif-selector-wrap {
