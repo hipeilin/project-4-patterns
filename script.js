@@ -1,5 +1,5 @@
-const WINDOW_LENGTH = 31; // window_idx through window_idx + 30
-const MAREY_WINDOW_SPAN = 31;
+const WINDOW_LENGTH = 60; // window_idx through window_idx + 30
+const MAREY_WINDOW_SPAN = 60;
 const CHART_WIDTH = 300;
 const CHART_HEIGHT = 100;
 const MARGIN = { top: 10, right: 12, bottom: 26, left: 38 };
