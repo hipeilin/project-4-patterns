@@ -1,5 +1,5 @@
-const WINDOW_LENGTH = 31; // window_idx through window_idx + 30
-const MAREY_WINDOW_SPAN = 31;
+const WINDOW_LENGTH = 45; // window_idx through window_idx + 30
+const MAREY_WINDOW_SPAN = 60;
 const CHART_WIDTH = 300;
 const CHART_HEIGHT = 100;
 const MARGIN = { top: 10, right: 12, bottom: 26, left: 38 };
@@ -187,171 +187,6 @@ function renderHalfDonutThumbnail(container, motifRow, options = {}) {
   const scale = Number.isFinite(Number(options.scale)) ? Number(options.scale) : 1;
   const wrapperClass = options.wrapperClass || "motif-thumbnail";
   const compactFilledOnly = Boolean(options.compactFilledOnly);
-  const width = 84;
-  const height = 78;
-  const icecreamX = 22;
-  const icecreamY = 4;
-  const icecreamWidth = 40;
-  const maxIcecreamHeight = 52;
-  const woodenStickWidth = 8;
-  const woodenStickHeight = 18;
-  const sectionGap = 0;
-  const maxSectionCount = THUMBNAIL_METRIC_COLUMNS.length;
-  const baseSectionHeight = (maxIcecreamHeight - sectionGap * (maxSectionCount - 1)) / maxSectionCount;
-  const sourceSegments = THUMBNAIL_METRIC_COLUMNS.map((key, i) => {
-    const raw = Number(motifRow[key]);
-    const normalized = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0;
-    return {
-      key,
-      value: normalized,
-      color: THUMBNAIL_COLORS[i]
-    };
-  });
-  const activeSegments =
-    compactFilledOnly ? sourceSegments.filter((segment) => segment.value > 0) : sourceSegments;
-  const sectionCount = Math.max(1, activeSegments.length);
-  const sectionHeight = baseSectionHeight;
-  const icecreamHeight = sectionCount * sectionHeight + sectionGap * (sectionCount - 1);
-  const icecreamBottomY = icecreamY + maxIcecreamHeight;
-  const stackTopY = icecreamBottomY - icecreamHeight;
-  const segments = activeSegments.map((segment, i) => {
-    const y = stackTopY + i * (sectionHeight + sectionGap);
-    const fillWidth = icecreamWidth * segment.value;
-    const fillX = icecreamX + (icecreamWidth - fillWidth) / 2;
-    return { ...segment, y, fillX, fillWidth };
-  });
-  const cycleCountRaw = Number(motifRow.cycle_count);
-  const cycleCountNormalized = Number.isFinite(cycleCountRaw)
-    ? Math.max(0, Math.min(1, cycleCountRaw))
-    : 0;
-  const correctnessRaw = Number(motifRow.correctness);
-  const correctnessNormalized = Number.isFinite(correctnessRaw)
-    ? Math.max(0, Math.min(1, correctnessRaw))
-    : 0;
-
-  const wrap = container
-    .append("div")
-    .attr("class", wrapperClass)
-    .style("width", `${width * scale}px`)
-    .style("height", `${height * scale}px`);
-  const svg = wrap
-    .append("svg")
-    .attr("class", "motif-thumbnail-svg")
-    .attr("viewBox", `0 0 ${width} ${height}`)
-    .style("width", `${width * scale}px`)
-    .style("height", `${height * scale}px`);
-  const rotateGroup = svg
-    .append("g")
-    .attr(
-      "transform",
-      `rotate(-20 ${icecreamX + icecreamWidth / 2} ${icecreamY + maxIcecreamHeight / 2})`
-    );
-
-  const roundedRectPath = (x, y, w, h, topRadius, bottomRadius) => {
-    const rt = Math.max(0, Math.min(topRadius, w / 2, h / 2));
-    const rb = Math.max(0, Math.min(bottomRadius, w / 2, h / 2));
-    return [
-      `M ${x + rt} ${y}`,
-      `H ${x + w - rt}`,
-      rt > 0 ? `Q ${x + w} ${y} ${x + w} ${y + rt}` : `L ${x + w} ${y}`,
-      `V ${y + h - rb}`,
-      rb > 0 ? `Q ${x + w} ${y + h} ${x + w - rb} ${y + h}` : `L ${x + w} ${y + h}`,
-      `H ${x + rb}`,
-      rb > 0 ? `Q ${x} ${y + h} ${x} ${y + h - rb}` : `L ${x} ${y + h}`,
-      `V ${y + rt}`,
-      rt > 0 ? `Q ${x} ${y} ${x + rt} ${y}` : `L ${x} ${y}`,
-      "Z"
-    ].join(" ");
-  };
-
-  rotateGroup.append("rect")
-    .attr("class", "thumb-icecream-rect")
-    .attr("x", icecreamX)
-    .attr("y", stackTopY)
-    .attr("width", icecreamWidth)
-    .attr("height", icecreamHeight)
-    .attr("rx", 4)
-    .attr("ry", 4)
-    .attr("fill", "none")
-    .attr("stroke", "#5f6d7a")
-    .attr("stroke-width", 1);
-
-  const woodenStickX = icecreamX + (icecreamWidth - woodenStickWidth) / 2;
-  const woodenStickY = icecreamBottomY;
-  const greenHeight = woodenStickHeight * correctnessNormalized;
-  const redHeight = woodenStickHeight - greenHeight;
-
-  rotateGroup.append("rect")
-    .attr("class", "thumb-wooden-stick-red")
-    .attr("x", woodenStickX)
-    .attr("y", woodenStickY)
-    .attr("width", woodenStickWidth)
-    .attr("height", redHeight)
-    .attr("fill", "#f23353");
-
-  rotateGroup.append("rect")
-    .attr("class", "thumb-wooden-stick-green")
-    .attr("x", woodenStickX)
-    .attr("y", woodenStickY + redHeight)
-    .attr("width", woodenStickWidth)
-    .attr("height", greenHeight)
-    .attr("fill", "#4cad97");
-
-  rotateGroup.append("rect")
-    .attr("class", "thumb-wooden-stick-rect")
-    .attr("x", woodenStickX)
-    .attr("y", woodenStickY)
-    .attr("width", woodenStickWidth)
-    .attr("height", woodenStickHeight)
-    .attr("rx", 1)
-    .attr("ry", 1)
-    .attr("fill", "none")
-    .attr("stroke", "#ababab")
-    .attr("stroke-width", 1);
-
-  rotateGroup.selectAll(".thumb-segment-bg")
-    .data(segments)
-    .enter()
-    .append("path")
-    .attr("class", "thumb-segment-bg")
-    .attr("d", (_d, i) => {
-      const topRadius = i === 0 ? 4 : 0;
-      const bottomRadius = i === segments.length - 1 ? 4 : 0;
-      return roundedRectPath(icecreamX, segments[i].y, icecreamWidth, sectionHeight, topRadius, bottomRadius);
-    })
-    .attr("fill", "#fff")
-    .attr("stroke", "#ccc")
-    .attr("stroke-width", 1);
-
-  rotateGroup.selectAll(".thumb-segment-value")
-    .data(segments)
-    .enter()
-    .append("rect")
-    .attr("class", "thumb-segment-value")
-    .attr("x", (d) => d.fillX)
-    .attr("y", (d) => d.y)
-    .attr("width", (d) => d.fillWidth)
-    .attr("height", sectionHeight)
-    .attr("fill", (d) => d.color);
-
-  const tracingSegment = segments.find((segment) => segment.key === "tracing_count");
-  if (tracingSegment && cycleCountNormalized > 0) {
-    const centerX = icecreamX + icecreamWidth / 2;
-    const fillSpanWidth = icecreamWidth * cycleCountNormalized;
-    rotateGroup.append("rect")
-      .attr("class", "thumb-tracing-cycle-fill")
-      .attr("x", centerX - fillSpanWidth / 2)
-      .attr("y", tracingSegment.y)
-      .attr("width", fillSpanWidth)
-      .attr("height", sectionHeight)
-      .attr("fill", "#d67d09")
-  }
-}
-
-function renderHalfDonutThumbnail(container, motifRow, options = {}) {
-  const scale = Number.isFinite(Number(options.scale)) ? Number(options.scale) : 1;
-  const wrapperClass = options.wrapperClass || "motif-thumbnail";
-  const compactFilledOnly = Boolean(options.compactFilledOnly);
   const barWidth = 60;
   const barHeight = 10;
   const barGap = 0;
@@ -461,8 +296,6 @@ function renderHalfDonutThumbnail(container, motifRow, options = {}) {
     .attr("y", 0.5)
     .attr("width", Math.max(0, barWidth - 1))
     .attr("height", Math.max(0, height - 1))
-    .attr("rx", 2)
-    .attr("ry", 2)
     .attr("fill", "none")
     .attr("stroke", "#6b7c93")
     .attr("stroke-width", 1);
@@ -520,6 +353,79 @@ function initStickyHorizontalScrollbar() {
   updateStickyHorizontalScrollbar();
 }
 
+function renderMotif6DSeries(container, sourceRows, startIndex, endIndex) {
+  const metricConfig = [
+    { key: "max_consecutive_same_source", color: THUMBNAIL_COLORS[0] },
+    { key: "max_consecutive_same_target", color: THUMBNAIL_COLORS[1] },
+    { key: "tracing_count", color: THUMBNAIL_COLORS[2] },
+    { key: "cycle_count", color: "#d67d09" },
+    { key: "max_consecutive_same_category", color: THUMBNAIL_COLORS[3] },
+    { key: "sparsity", color: THUMBNAIL_COLORS[4] }
+  ];
+  const start = Math.max(0, Number(startIndex));
+  const end = Math.min(sourceRows.length - 1, Number(endIndex));
+  const windowRows = sourceRows.slice(start, end + 1);
+  if (!windowRows.length) {
+    container.append("p").attr("class", "error").text("No timeseries rows in selected window.");
+    return;
+  }
+
+  const seriesWrap = container.append("div").attr("class", "motif-6d-series-wrap");
+  const width = 300;
+  const height = 120;
+  const margin = { top: 8, right: 10, bottom: 24, left: 28 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+
+  const svg = seriesWrap
+    .append("svg")
+    .attr("class", "motif-6d-series-svg")
+    .attr("viewBox", `0 0 ${width} ${height}`);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const x = d3
+    .scaleLinear()
+    .domain([start, end])
+    .range([0, plotWidth]);
+  const y = d3
+    .scaleLinear()
+    .domain([0, 1])
+    .range([plotHeight, 0]);
+
+  g.append("g")
+    .attr("class", "axis")
+    .attr("transform", `translate(0,${plotHeight})`)
+    .call(d3.axisBottom(x).ticks(4).tickFormat(d3.format("d")));
+  g.append("g")
+    .attr("class", "axis")
+    .call(d3.axisLeft(y).ticks(3));
+
+  const line = d3
+    .line()
+    .defined((d) => Number.isFinite(d.y))
+    .x((d) => x(d.x))
+    .y((d) => y(d.y));
+
+  const series = metricConfig.map((metric) => ({
+    key: metric.key,
+    color: metric.color,
+    values: windowRows.map((row, i) => ({
+      x: start + i,
+      y: Number(row[metric.key])
+    }))
+  }));
+
+  g.selectAll(".motif-6d-line")
+    .data(series)
+    .enter()
+    .append("path")
+    .attr("class", "motif-6d-line")
+    .attr("fill", "none")
+    .attr("stroke", (d) => d.color)
+    .attr("stroke-width", 1.5)
+    .attr("d", (d) => line(d.values));
+}
+
 function renderTimeseriesCard(motifRow, index, rows, columns, startIndex, endIndex) {
   const card = chartsContainer.append("article").attr("class", "chart-card");
   const rowIdx = Number(startIndex);
@@ -539,11 +445,15 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex, endInd
     const value = Number(targetRow[column]);
     return Number.isFinite(value) ? Number(value.toFixed(6)).toString() : "N/A";
   });
+  const windowStart = Math.max(0, Number(startIndex));
+  const windowEnd = Math.min(rows.length - 1, Number(endIndex));
+  const windowRows = rows.slice(windowStart, windowEnd + 1);
 
   card.append("h3")
     .attr("class", "chart-title")
     .text(`${index + 1}. ${motifRow.filename}`);
   renderHalfDonutThumbnail(card, motifRow);
+  renderMotif6DSeries(card, rows, startIndex, endIndex);
   card.append("p")
     .attr("class", "chart-subtitle")
     .attr("data-role", "derived-range-events")
@@ -553,19 +463,27 @@ function renderTimeseriesCard(motifRow, index, rows, columns, startIndex, endInd
     .html(
       `<span class="help-dashed-label" data-tooltip="The total number of times this motif has been found in sequences. Note that there can be multiple matches in the same sequence!">frequency</span>=${formatValue(motifRow.frequency, 0)}, <span class="help-dashed-label" data-tooltip="The total number of unique sequences this motif was found.">unique_count</span>=${formatValue(motifRow.unique_count, 0)}, <span class="help-dashed-label" data-tooltip="Measure how strong this motif is. The score: # of unique_count / total number of participants.">support</span>=${formatPercent(motifRow.support)}`
     );
-  card.append("p")
-    .attr("class", "chart-subtitle")
-    .html(
-      `<span class="help-dashed-label" data-tooltip="A 6-dimensional vector that contains the summary for the 30-second window. The dimensions are displayed below.">[${metricValues.join(", ")}]</span>`
-    );
+  // card.append("p")
+  //   .attr("class", "chart-subtitle")
+  //   .html(
+  //     `<span class="help-dashed-label" data-tooltip="A 6-dimensional vector that contains the summary for the 30-second window. The dimensions are displayed below.">[${metricValues.join(", ")}]</span>`
+  //   );
 
+  const averageMetric = (columnName) => {
+    if (!windowRows.length) return Number.NaN;
+    const values = windowRows
+      .map((row) => Number(row[columnName]))
+      .filter((value) => Number.isFinite(value));
+    if (!values.length) return Number.NaN;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  };
   const metrics = [
-    ["max_consecutive_same_source", motifRow.max_consecutive_same_source],
-    ["max_consecutive_same_target", motifRow.max_consecutive_same_target],
-    ["tracing_count", motifRow.tracing_count],
-    ["cycle_count", motifRow.cycle_count],
-    ["max_consecutive_same_category", motifRow.max_consecutive_same_category],
-    ["sparsity", motifRow.sparsity]
+    ["max_consecutive_same_source", averageMetric("max_consecutive_same_source")],
+    ["max_consecutive_same_target", averageMetric("max_consecutive_same_target")],
+    ["tracing_count", averageMetric("tracing_count")],
+    ["cycle_count", averageMetric("cycle_count")],
+    ["max_consecutive_same_category", averageMetric("max_consecutive_same_category")],
+    ["sparsity", averageMetric("sparsity")]
   ];
   const sparsityTooltip = "1.0 / (1.0 + n_actions / 8). 8 is a custom number.";
   const metricsTable = card.append("table").attr("class", "metrics-table");

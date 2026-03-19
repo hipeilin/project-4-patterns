@@ -103,6 +103,16 @@ main {
   display: block;
 }
 
+.motif-6d-series-wrap {
+  margin: 2px 0 8px;
+}
+
+.motif-6d-series-svg {
+  width: 100%;
+  height: 110px;
+  display: block;
+}
+
 .chart-subtitle {
   margin: 0 0 8px;
   color: #627d98;
